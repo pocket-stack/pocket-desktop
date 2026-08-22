@@ -21,6 +21,10 @@ import {
   treeHasText,
   type SimWorld,
 } from "../vendor/pocketjs/hosts/sim/sim.ts";
+import {
+  CLASSIC_THEME,
+  XP_THEME,
+} from "../src/system-ui/theme.ts";
 
 const APP = "pocket-desktop-system-ui.vue-vapor";
 
@@ -106,7 +110,48 @@ function mouse(svc: MockSvc, x: number, y: number, d: boolean, b?: number) {
   );
 }
 
+function treeHasClass(tree: unknown, className: string): boolean {
+  if (tree == null) return false;
+  const node = tree as { c?: unknown; k?: unknown[] };
+  if (node.c === className) return true;
+  return Array.isArray(node.k) &&
+    node.k.some((child) => treeHasClass(child, className));
+}
+
 describe("system-ui System UI companion journey", () => {
+  test("switches classic and XP paint at runtime", async () => {
+    const svc = mockSvc();
+    const world = await bootWorld(APP, 60, undefined, svc.mutateOps);
+    svc.push({ t: "hello", w: 800, h: 600, epoch: 1755650000000 });
+    await step(world, 3);
+
+    expect(treeHasClass(world.getTree(), CLASSIC_THEME.desktop)).toBe(true);
+
+    // Start -> Settings exposes the user-facing theme choices. At 800x600
+    // the Settings row begins at y=433 and its two-row flyout at x=181.
+    svc.push({ t: "key", k: "escape", cmd: true });
+    await step(world, 2);
+    mouse(svc, 100, 445, false);
+    await step(world, 2);
+    expect(treeHasText(world.getTree(), "Classic 98")).toBe(true);
+    expect(treeHasText(world.getTree(), "Windows XP")).toBe(true);
+    mouse(svc, 220, 461, true);
+    mouse(svc, 220, 461, false);
+    await step(world, 2);
+    let tree = world.getTree();
+    expect(treeHasClass(tree, XP_THEME.desktop)).toBe(true);
+    expect(treeHasClass(tree, XP_THEME.taskbar)).toBe(true);
+    expect(
+      treeHasClass(tree, XP_THEME.caption(true)),
+    ).toBe(true);
+
+    svc.push({ t: "key", k: "t", cmd: true, sh: true });
+    await step(world, 2);
+    tree = world.getTree();
+    expect(treeHasClass(tree, CLASSIC_THEME.desktop)).toBe(true);
+    expect(treeHasClass(tree, XP_THEME.desktop)).toBe(false);
+  }, 30000);
+
   test("typing, selection, ⌘ chords, context menu and paste-req", async () => {
     const svc = mockSvc();
     const world = await bootWorld(APP, 60, undefined, svc.mutateOps);

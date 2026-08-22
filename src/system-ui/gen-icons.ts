@@ -442,6 +442,33 @@ const NATIVE: Icon[] = [
     rows: ["........", "kk....kk", ".kk..kk.", "..kkkk..", "...kk...", "..kkkk..", ".kk..kk.", "kk....kk"],
   },
   {
+    // Luna caption glyphs are the same compact geometry in white. They keep
+    // their own files so switching themes never needs image tint semantics.
+    file: "xp-cap-min.svg",
+    rows: ["........", "........", "........", "........", "........", ".wwwwww.", ".wwwwww.", "........"],
+  },
+  {
+    file: "xp-cap-max.svg",
+    rows: ["wwwwwwww", "wwwwwwww", "w......w", "w......w", "w......w", "w......w", "w......w", "wwwwwwww"],
+  },
+  {
+    file: "xp-cap-restore.svg",
+    rows: [
+      "...wwwww",
+      "...wwwww",
+      "...w...w",
+      "wwwww..w",
+      "wwwwwwww",
+      "w...w...",
+      "w...w...",
+      "wwwww...",
+    ],
+  },
+  {
+    file: "xp-cap-close.svg",
+    rows: ["........", "ww....ww", ".ww..ww.", "..wwww..", "...ww...", "..wwww..", ".ww..ww.", "ww....ww"],
+  },
+  {
     file: "menu-arrow.svg",
     rows: ["........", "..k.....", "..kk....", "..kkk...", "..kkkk..", "..kkk...", "..kk....", "..k....."],
   },

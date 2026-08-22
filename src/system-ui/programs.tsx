@@ -13,8 +13,8 @@ import {
   View,
 } from "@pocketjs/framework/components";
 import { getOps } from "@pocketjs/framework/host";
-import { T_CLASSIC } from "./chrome.tsx";
-import { FONT, FRAME } from "./theme.ts";
+import { UiText } from "./chrome.tsx";
+import { FONT, type DesktopTheme } from "./theme.ts";
 import {
   caretXY,
   segSelSpan,
@@ -65,10 +65,10 @@ export function padWidth(s: string): number {
 /** Wrap width for a notepad window: the content well minus the 3px text
  *  insets (mirrors NotepadView's left-[3] + right margin). Infinity when
  *  Word Wrap is off — every line becomes one visual segment. */
-export function padWrapW(w: WinCtl): number {
+export function padWrapW(w: WinCtl, frame: number): number {
   const d = w.data as PadData;
   return d.wrap.value
-    ? Math.max(40, w.geo.value.w - FRAME * 2 - PAD_PAD * 2)
+    ? Math.max(40, w.geo.value.w - frame * 2 - PAD_PAD * 2)
     : Infinity;
 }
 
@@ -99,15 +99,16 @@ export function wrapDocHost(lines: string[], maxW: number): VSeg[] {
 
 /** The window's visual segments — the ONE layout both the render below and
  *  app.tsx hit-testing/caret movement read. */
-export function padSegs(w: WinCtl): VSeg[] {
+export function padSegs(w: WinCtl, frame: number): VSeg[] {
   const d = w.data as PadData;
-  return wrapDocHost(d.doc.value.lines, padWrapW(w));
+  return wrapDocHost(d.doc.value.lines, padWrapW(w, frame));
 }
 
 export function NotepadView(props: {
   data: PadData;
   wrapW: number;
   active: boolean;
+  theme: DesktopTheme;
 }) {
   const d = props.data;
   const segsAll = () => wrapDocHost(d.doc.value.lines, props.wrapW);
@@ -129,7 +130,7 @@ export function NotepadView(props: {
     ];
   };
   return (
-    <View class="flex-1 flex-col bg-[#ffffff] bevel-[#808080,#ffffff,#000000,#dfdfdf] overflow-hidden">
+    <View class={props.theme.notepadWell}>
       <View class="flex-1 relative overflow-hidden">
         <View
           class="absolute left-[3] top-[3] right-0 flex-col"
@@ -139,17 +140,17 @@ export function NotepadView(props: {
             <View class="h-[16] flex-row items-center">
               {vi === caretPos().vrow && d.preedit.value
                 ? [
-                    <T_CLASSIC
+                    <UiText
                       t={d.doc.value.lines[seg.row].slice(
                         seg.from,
                         d.doc.value.caret.col,
                       )}
                     />,
                     <View class="flex-col">
-                      <T_CLASSIC t={d.preedit.value.s} />
+                      <UiText t={d.preedit.value.s} />
                       <View class="h-[1] bg-[#000000]" />
                     </View>,
-                    <T_CLASSIC
+                    <UiText
                       t={d.doc.value.lines[seg.row].slice(
                         d.doc.value.caret.col,
                         seg.to,
@@ -158,11 +159,11 @@ export function NotepadView(props: {
                   ]
                 : parts(seg).map((p) =>
                     p.sel ? (
-                      <View class="bg-[#000080] flex-row">
-                        <T_CLASSIC cls="text-[#ffffff]" t={p.t} />
+                      <View class={props.theme.selection}>
+                        <UiText cls={props.theme.selectionText} t={p.t} />
                       </View>
                     ) : (
-                      <T_CLASSIC t={p.t} />
+                      <UiText t={p.t} />
                     ),
                   )}
             </View>
@@ -190,13 +191,17 @@ export function NotepadView(props: {
 // AppSupervisor or while the isolated package has no DrawList to paint.
 // ---------------------------------------------------------------------------
 
-export function PocketAppView(props: { data: PocketData; active: boolean }) {
+export function PocketAppView(props: {
+  data: PocketData;
+  active: boolean;
+  theme: DesktopTheme;
+}) {
   return (
     <View class="flex-1 relative overflow-hidden bg-[#000000]">
-      <View class="absolute inset-0 flex-col items-center justify-center bg-[#c0c0c0] px-[20]">
+      <View class={props.theme.pocketLoading}>
         <Image class="w-[32] h-[32] mb-[8]" src="icons/pocket-app.svg" />
-        <T_CLASSIC t={`Starting ${props.data.app.title}...`} />
-        <T_CLASSIC cls="text-[#808080] mt-[5]" t="Arrow keys + Z/X/A/S + Q/W" />
+        <UiText t={`Starting ${props.data.app.title}...`} />
+        <UiText cls={props.theme.mutedText} t="Arrow keys + Z/X/A/S + Q/W" />
       </View>
       <CompositorSurface
         class="absolute inset-0"
@@ -374,7 +379,7 @@ function MinesCell(props: { data: MinesData; i: number }) {
           {c().mine ? (
             <Image class="w-[8] h-[8]" src="icons/mine.svg" />
           ) : c().adj > 0 ? (
-            <T_CLASSIC
+            <UiText
               bold
               cls={NUM_COLORS[c().adj] || "text-[#000000]"}
               t={String(c().adj)}
@@ -391,7 +396,10 @@ const ROWS9 = Array.from({ length: MINES_W }, (_, i) => i);
 /** Minesweeper content: sunken header (mine counter, smiley, timer) over the
  *  9×9 field. The grid rides static index arrays — the board ref retriggers
  *  cell reads, rows never move. */
-export function MinesView(props: { data: MinesData }) {
+export function MinesView(props: {
+  data: MinesData;
+  theme: DesktopTheme;
+}) {
   const d = props.data;
   const smiley = () => {
     if (d.smileyHeld.value) return "icons/smile.svg";
@@ -402,7 +410,7 @@ export function MinesView(props: { data: MinesData }) {
     return "icons/smile.svg";
   };
   return (
-    <View class="flex-1 flex-col p-[5] bg-[#c0c0c0]">
+    <View class={props.theme.minesRoot}>
       <View class="h-[36] flex-row items-center justify-between px-[5] bevel-[#808080,#ffffff] bevel-w-[2]">
         <Counter value={10 - d.board.value.flags} />
         <View
@@ -444,51 +452,57 @@ export function folderRowAt(cy: number, rowCount: number): number {
   return i >= 0 && i < rowCount ? i : -1;
 }
 
-export function FolderView(props: { data: FolderData; resizable: boolean }) {
+export function FolderView(props: {
+  data: FolderData;
+  resizable: boolean;
+  theme: DesktopTheme;
+}) {
   const d = props.data;
   return (
     <View class="flex-1 flex-col">
-      <View class="flex-1 flex-col bg-[#ffffff] bevel-[#808080,#ffffff,#000000,#dfdfdf] p-[1] overflow-hidden">
+      <View class={props.theme.folderWell}>
         <View class="h-[17] flex-row shrink-0">
-          <View class="flex-1 flex-row items-center px-[6] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]">
-            <T_CLASSIC t="Name" />
+          <View class={props.theme.folderHeader("name")}>
+            <UiText t="Name" />
           </View>
-          <View class="w-[64] flex-row items-center justify-end px-[6] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]">
-            <T_CLASSIC t="Size" />
+          <View class={props.theme.folderHeader("size")}>
+            <UiText t="Size" />
           </View>
-          <View class="w-[104] flex-row items-center px-[6] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]">
-            <T_CLASSIC t="Type" />
+          <View class={props.theme.folderHeader("type")}>
+            <UiText t="Type" />
           </View>
         </View>
         {d.rows.map((row, i) => (
           <View
-            class={
-              d.selected.value === i
-                ? "h-[17] flex-row items-center px-[2] bg-[#000080] shrink-0"
-                : "h-[17] flex-row items-center px-[2] shrink-0"
-            }
+            class={props.theme.folderRow(d.selected.value === i)}
           >
             <Image class="w-[16] h-[16] mr-[4]" src={row.icon} />
             <View class="flex-1 flex-row overflow-hidden">
-              <T_CLASSIC
+              <UiText
                 cls={
-                  d.selected.value === i ? "text-[#ffffff]" : "text-[#000000]"
+                  d.selected.value === i
+                    ? props.theme.selectionText
+                    : "text-[#000000]"
                 }
                 t={row.name}
               />
             </View>
             <View class="w-[60] flex-row justify-end">
-              <T_CLASSIC
+              <UiText
                 cls={
-                  d.selected.value === i ? "text-[#ffffff]" : "text-[#000000]"
+                  d.selected.value === i
+                    ? props.theme.selectionText
+                    : "text-[#000000]"
                 }
                 t={row.size}
               />
             </View>
             <View class="w-[100] flex-row pl-[6]">
-              <T_CLASSIC
+              <UiText
                 cls={
-                  d.selected.value === i ? "text-[#ffffff]" : "text-[#000000]"
+                  d.selected.value === i
+                    ? props.theme.selectionText
+                    : "text-[#000000]"
                 }
                 t={row.type}
               />
@@ -497,13 +511,13 @@ export function FolderView(props: { data: FolderData; resizable: boolean }) {
         ))}
         {d.rows.length === 0 ? (
           <View class="flex-1 flex-col justify-center items-center">
-            <T_CLASSIC cls="text-[#808080]" t="(empty)" />
+            <UiText cls={props.theme.mutedText} t="(empty)" />
           </View>
         ) : null}
       </View>
       <View class="h-[20] flex-row items-end gap-[2] pt-[2]">
-        <View class="flex-1 h-[18] flex-row items-center px-[6] bevel-[#808080,#ffffff]">
-          <T_CLASSIC t={`${d.rows.length} object(s)`} />
+        <View class={props.theme.statusWell}>
+          <UiText t={`${d.rows.length} object(s)`} />
         </View>
         {props.resizable ? (
           <Image class="w-[16] h-[16]" src="icons/grip.svg" />
@@ -520,18 +534,16 @@ export function FolderView(props: { data: FolderData; resizable: boolean }) {
 export const ABOUT_GEO = { w: 340, h: 216 } as const;
 export const SHUTDOWN_GEO = { w: 300, h: 176 } as const;
 
-/** Dialog push button; armed = pressed bevel + 1px content nudge. */
-function Button98(props: { label: string; armed: boolean }) {
+/** Dialog push button; armed = pressed face + 1px content nudge. */
+function DialogButton(props: {
+  label: string;
+  armed: boolean;
+  theme: DesktopTheme;
+}) {
   return (
-    <View
-      class={
-        props.armed
-          ? "w-[75] h-[23] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
-          : "w-[75] h-[23] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]"
-      }
-    >
+    <View class={props.theme.dialogButton(props.armed)}>
       <View class={props.armed ? "ml-[1] mt-[1]" : ""}>
-        <T_CLASSIC t={props.label} />
+        <UiText t={props.label} />
       </View>
     </View>
   );
@@ -549,25 +561,35 @@ export function aboutHit(
   return cx >= x && cx < x + 75 && cy >= y && cy < y + 23 ? "ok" : null;
 }
 
-export function AboutView(props: { data: AboutData }) {
+export function AboutView(props: {
+  data: AboutData;
+  theme: DesktopTheme;
+}) {
   return (
     <View class="flex-1 flex-col p-[10] gap-[8]">
       <View class="flex-row items-center gap-[10]">
         <Image class="w-[32] h-[32]" src="icons/computer.svg" />
-        <T_CLASSIC xl t="Pocket Desktop" />
+        <UiText xl t="Pocket Desktop" />
       </View>
       <View class="h-[2] flex-col">
         <View class="h-[1] bg-[#808080]" />
         <View class="h-[1] bg-[#ffffff]" />
       </View>
-      <T_CLASSIC t="A desktop compositor demo on the gpui backend." />
-      <T_CLASSIC t="Vue Vapor JSX over the same DrawList the" />
-      <T_CLASSIC t="consoles boot; windows, menus and shortcuts" />
-      <T_CLASSIC t="live in the guest." />
-      <T_CLASSIC cls="text-[#808080]" t="github.com/pocket-stack/pocketjs" />
+      <UiText t="A desktop compositor demo on the gpui backend." />
+      <UiText t="Vue Vapor JSX over the same DrawList the" />
+      <UiText t="consoles boot; windows, menus and shortcuts" />
+      <UiText t="live in the guest." />
+      <UiText
+        cls={props.theme.mutedText}
+        t="github.com/pocket-stack/pocket-desktop"
+      />
       <View class="flex-1" />
       <View class="flex-row justify-end">
-        <Button98 label="OK" armed={props.data.armed.value === "ok"} />
+        <DialogButton
+          label="OK"
+          armed={props.data.armed.value === "ok"}
+          theme={props.theme}
+        />
       </View>
     </View>
   );
@@ -596,7 +618,10 @@ export function shutdownHit(
   return null;
 }
 
-export function ShutdownView(props: { data: ShutdownData }) {
+export function ShutdownView(props: {
+  data: ShutdownData;
+  theme: DesktopTheme;
+}) {
   const radio = (i: number, label: string) => (
     <View class="h-[20] flex-row items-center gap-[6]">
       <View class="w-[12] h-[12] rounded-full bg-[#808080] flex-col justify-center items-center">
@@ -606,7 +631,7 @@ export function ShutdownView(props: { data: ShutdownData }) {
           ) : null}
         </View>
       </View>
-      <T_CLASSIC t={label} />
+      <UiText t={label} />
     </View>
   );
   return (
@@ -614,7 +639,7 @@ export function ShutdownView(props: { data: ShutdownData }) {
       <View class="flex-row items-start gap-[10]">
         <Image class="w-[32] h-[32]" src="icons/shutdown.svg" />
         <View class="flex-col gap-[2]">
-          <T_CLASSIC t="What do you want the computer to do?" />
+          <UiText t="What do you want the computer to do?" />
         </View>
       </View>
       <View class="h-[10]" />
@@ -624,8 +649,16 @@ export function ShutdownView(props: { data: ShutdownData }) {
       </View>
       <View class="flex-1" />
       <View class="flex-row justify-end gap-[6]">
-        <Button98 label="OK" armed={props.data.armed.value === "ok"} />
-        <Button98 label="Cancel" armed={props.data.armed.value === "cancel"} />
+        <DialogButton
+          label="OK"
+          armed={props.data.armed.value === "ok"}
+          theme={props.theme}
+        />
+        <DialogButton
+          label="Cancel"
+          armed={props.data.armed.value === "cancel"}
+          theme={props.theme}
+        />
       </View>
     </View>
   );
