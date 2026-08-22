@@ -41,6 +41,9 @@ bun run build
 bun run macos
 ```
 
+Regenerate the checked-in classic-theme screenshot from the deterministic
+PocketJS simulator with `bun run capture`.
+
 Pass native-host script flags after `--`, for example:
 
 ```sh
