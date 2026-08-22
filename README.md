@@ -80,6 +80,22 @@ replace its shell fallback before saving `dist/web-smoke.png`.
 Regenerate the checked-in classic-theme screenshot from the deterministic
 PocketJS simulator with `bun run capture`.
 
+## Classic baseline benchmark
+
+Build the macOS release host, keep the desktop session unlocked and run:
+
+```sh
+bun run build
+bun run benchmark:classic
+```
+
+The benchmark records the native executable and complete installed System
+artifact sizes, ten process-cold/cache-warm launches from spawn to the first
+painted frame, and settled idle process-tree RSS plus macOS physical footprint.
+It writes the raw samples, machine identity, source revisions and a Markdown
+summary to `docs/bench/classic-<date>.{json,md}`. Use `--quick` for a three-run
+smoke check; quick results cannot replace the checked-in baseline.
+
 Pass native-host script flags after `--`, for example:
 
 ```sh
