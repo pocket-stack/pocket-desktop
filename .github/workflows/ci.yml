@@ -17,6 +17,8 @@ jobs:
           submodules: recursive
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - run: bun install --cwd vendor/pocketjs --frozen-lockfile
       - run: bun scripts/setup.ts
       - run: bun run check
