@@ -19,6 +19,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+      - run: bun install --frozen-lockfile
       - run: bun install --cwd vendor/pocketjs --frozen-lockfile
       - run: bun scripts/setup.ts
       - run: bun run check
@@ -48,6 +49,7 @@ jobs:
             vendor/pocketjs/engine/backends/gpui
             vendor/pocketjs/hosts/desktop
             vendor/pocketjs/engine/wasm
+      - run: bun install --frozen-lockfile
       - run: bun install --cwd vendor/pocketjs --frozen-lockfile
       - run: bun scripts/setup.ts
       - run: bun run check
@@ -58,6 +60,10 @@ jobs:
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: bun run test:web
+      - name: Build and verify the product site
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: bun scripts/site.ts --reuse-preview && bun run test:site
       - name: Launch the packaged System under X11
         run: >-
           timeout 30s xvfb-run -a
@@ -70,4 +76,6 @@ jobs:
             dist/linux-app/pocket-desktop-linux-*.tar.gz
             dist/web
             dist/web-smoke.png
+            dist/site-smoke.png
+            dist/site
           if-no-files-found: error

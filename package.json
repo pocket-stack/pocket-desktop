@@ -10,7 +10,7 @@
     "url": "git+https://github.com/pocket-stack/pocket-desktop.git"
   },
   "scripts": {
-    "setup": "git submodule update --init && bun install --cwd vendor/pocketjs --frozen-lockfile && bun scripts/setup.ts",
+    "setup": "bun install --frozen-lockfile && git submodule update --init && bun install --cwd vendor/pocketjs --frozen-lockfile && bun scripts/setup.ts",
     "typecheck": "bun vendor/pocketjs/node_modules/typescript/bin/tsc --noEmit",
     "test": "bun test test/system-ui.test.ts",
     "test:sim": "bun scripts/build-sim.ts && bun test --conditions=browser test/system-ui-sim.test.ts",
@@ -24,9 +24,15 @@
     "build:web": "bun scripts/web.ts --build-only",
     "web": "bun scripts/web.ts",
     "test:web": "bun scripts/web-smoke.ts",
+    "build:site": "bun scripts/site.ts",
+    "test:site": "bun scripts/site-smoke.ts",
+    "deploy:site": "bun run build:site && wrangler deploy",
     "benchmark:classic": "bun scripts/benchmark-classic.ts",
     "capture": "bun scripts/build-sim.ts && bun scripts/capture.ts",
     "bake:fonts": "bun src/system-ui/gen-assets.ts",
     "bake:icons": "bun src/system-ui/gen-icons.ts"
+  },
+  "devDependencies": {
+    "wrangler": "4.125.0"
   }
 }

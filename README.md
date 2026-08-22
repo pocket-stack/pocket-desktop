@@ -82,6 +82,18 @@ shell's `CompositorSurface` painter positions. `test:web` drives a real
 headless Chrome double-click journey and requires the Hero child raster to
 replace its shell fallback before saving `dist/web-smoke.png`.
 
+Build and verify the product site, including the complete preview at `/play/`,
+with:
+
+```sh
+bun run build:site
+bun run test:site
+```
+
+The production site is deployed as Cloudflare Workers Static Assets at
+`desktop.pocketlab.build`. The checked-in Wrangler configuration owns its
+custom-domain route; `bun run deploy:site` builds before publishing.
+
 Regenerate both checked-in theme screenshots from the deterministic PocketJS
 simulator with `bun run capture`.
 
