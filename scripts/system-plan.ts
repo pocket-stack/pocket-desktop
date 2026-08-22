@@ -9,8 +9,11 @@ export const ROOT = resolve(import.meta.dir, "..");
 export const POCKETJS_ROOT = resolve(ROOT, "vendor/pocketjs");
 export const DIST = resolve(ROOT, "dist");
 export const PLAN_DIR = resolve(ROOT, ".pocket/macos-app");
+export type DesktopTarget = "macos-app" | "linux-app" | "web-app";
 
-export async function resolveDesktopSystem(): Promise<ResolvedSystemPlan> {
+export async function resolveDesktopSystem(
+  target: DesktopTarget = "macos-app",
+): Promise<ResolvedSystemPlan> {
   const systemPath = resolve(ROOT, "pocket.system.json");
   const input = await Bun.file(systemPath).json();
   const validated = validatePocketSystem(input);
@@ -32,12 +35,12 @@ export async function resolveDesktopSystem(): Promise<ResolvedSystemPlan> {
       })),
   );
   const resolved = validateAndResolveSystemPlan(input, {
-    target: "macos-app",
+    target,
     packages,
   });
   if (!resolved.ok) {
     throw new Error(
-      `Pocket Desktop does not resolve against macos-app: ${resolved.diagnostics
+      `Pocket Desktop does not resolve against ${target}: ${resolved.diagnostics
         .map((item) => `${item.path || "/"}: ${item.message}`)
         .join("; ")}`,
     );

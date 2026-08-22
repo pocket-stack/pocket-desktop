@@ -21,7 +21,7 @@ pocket.system.json
              ↓
       ResolvedSystemPlan
              ↓
-  PocketJS generic macOS host
+  PocketJS generic native desktop host
       ├─ System UI AppInstance
       ├─ AppSupervisor
       └─ native compositor surfaces
@@ -32,7 +32,9 @@ pinned `vendor/pocketjs` submodule and are not copied into this product.
 
 ## Build
 
-Requirements: macOS, Bun, Rust and Xcode command-line tools.
+Requirements: Bun and Rust. macOS native builds also need Xcode command-line
+tools. Linux native builds need the gpui X11/Wayland, Fontconfig and Vulkan
+development libraries listed by the CI workflow.
 
 ```sh
 bun run setup
@@ -40,6 +42,40 @@ bun run check
 bun run build
 bun run macos
 ```
+
+On Linux, build and launch the same resolved Pocket System through the generic
+gpui AppSupervisor host:
+
+```sh
+bun run linux
+bun run package:linux
+```
+
+`package:linux` creates a relocatable `PocketDesktop` product directory and a
+`pocket-desktop-linux-<arch>.tar.gz` distribution. After installing the Linux
+libraries listed above, extract it and run:
+
+```sh
+./PocketDesktop/bin/pocket-desktop
+```
+
+The relocatable launcher sets the artifact root and passes the complete
+`ResolvedSystemPlan` to the native host.
+
+Build or serve the browser preview with:
+
+```sh
+bun run build:web
+bun run web
+bun run test:web
+```
+
+The browser host runs every installed package in an independent iframe
+JavaScript Realm with its own wasm UI instance. The parent AppSupervisor
+schedules focused/visible AppInstances and composites child rasters at the
+shell's `CompositorSurface` painter positions. `test:web` drives a real
+headless Chrome double-click journey and requires the Hero child raster to
+replace its shell fallback before saving `dist/web-smoke.png`.
 
 Regenerate the checked-in classic-theme screenshot from the deterministic
 PocketJS simulator with `bun run capture`.
