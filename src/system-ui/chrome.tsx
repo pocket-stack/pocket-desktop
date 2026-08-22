@@ -1,17 +1,21 @@
-// src/system-ui/chrome.tsx — presentational Windows 98 chrome, Vue Vapor JSX
+// src/system-ui/chrome.tsx — presentational theme-neutral chrome, Vue Vapor JSX
 // (vue-jsx-vapor; lists are plain .map() like every vapor JSX app in the
 // repo). Every component here only paints; the compositor (app.tsx) owns hit
 // testing and routes all pointer/keyboard input itself off the svc mouse
 // stream, so nothing in this file registers a handler. Geometry mirrors
-// wm.ts via theme.ts constants.
+// wm.ts through the active theme's ChromeMetrics.
 //
 // Class strings are FULL literals throughout — the style table compiles at
 // build time and template-interpolated fragments are a compile error, so the
-// bevel recipes repeat verbatim instead of riding shared constants.
+// complete theme-selected classes stay visible to the compiler.
 
 import { Image, Text, View } from "@pocketjs/framework/components";
-import { FONT, FONT_B, FONT_XL } from "./theme.ts";
-import type { CaptionButton } from "./wm.ts";
+import {
+  FONT,
+  FONT_B,
+  FONT_XL,
+  type DesktopTheme,
+} from "./theme.ts";
 import type { DeskIcon, Popup, TaskEntry, WinCtl } from "./state.ts";
 import { desktopIconPosition } from "./wm.ts";
 
@@ -19,7 +23,7 @@ import { desktopIconPosition } from "./wm.ts";
  *  sees them (baked per-app via pak.json, docs in gen-assets.ts). Text rides
  *  the `t` prop; `cls` replaces the class attr so nothing falls through to
  *  a user component's attrs. */
-export function T_CLASSIC(props: {
+export function UiText(props: {
   t: string;
   cls?: string;
   bold?: boolean;
@@ -35,39 +39,32 @@ export function T_CLASSIC(props: {
   );
 }
 
-const BTN_ICON: Record<CaptionButton, string> = {
-  min: "icons/cap-min.svg",
-  max: "icons/cap-max.svg",
-  close: "icons/cap-close.svg",
-};
-
-/** Caption controls, flush right and flush against each other (wm.ts
- *  captionButtonXs mirrors this row). Press feedback inverts the bevel and
- *  nudges the glyph one px — app.tsx drives win.pressedBtn off the raw
- *  pointer stream. */
-export function CaptionButtons(props: { win: WinCtl }) {
+/** Caption controls. wm.ts mirrors the theme-selected cell size, right inset
+ *  and gap. app.tsx drives pressed feedback off the raw pointer stream. */
+export function CaptionButtons(props: {
+  win: WinCtl;
+  active: boolean;
+  theme: DesktopTheme;
+}) {
   const w = props.win;
   return (
-    <View class="flex-row items-center">
+    <View class={props.theme.captionControls}>
       {w.buttons.map((btn) => (
         <View
-          class={
-            w.pressedBtn.value === btn
-              ? "w-[16] h-[14] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
-              : "w-[16] h-[14] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]"
-          }
+          class={props.theme.captionButton(
+            btn,
+            w.pressedBtn.value === btn,
+            props.active,
+          )}
         >
           <Image
-            class={
-              w.pressedBtn.value === btn
-                ? "w-[8] h-[8] ml-[1] mt-[1]"
-                : "w-[8] h-[8]"
-            }
-            src={
-              btn === "max" && w.maximized.value
-                ? "icons/cap-restore.svg"
-                : BTN_ICON[btn]
-            }
+            class={props.theme.captionGlyphClass(
+              w.pressedBtn.value === btn,
+            )}
+            src={props.theme.captionGlyphSource(
+              btn,
+              btn === "max" && w.maximized.value,
+            )}
           />
         </View>
       ))}
@@ -83,52 +80,53 @@ export function Taskbar(props: {
   startOpen: boolean;
   clock: string;
   buttonW: number;
+  theme: DesktopTheme;
 }) {
   return (
     <View
-      class="absolute left-0 right-0 bottom-0 h-[28] flex-row items-center bg-[#c0c0c0] bevel-[#ffffff,#808080] pl-[2] pr-[2] gap-[3]"
+      class={props.theme.taskbar}
       style={{ zIndex: 10000 }}
     >
       <View
-        class={
-          props.startOpen
-            ? "h-[22] w-[54] flex-row justify-center items-center gap-[3] bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
-            : "h-[22] w-[54] flex-row justify-center items-center gap-[3] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]"
-        }
+        class={props.theme.startButton(props.startOpen)}
       >
         <Image class="w-[16] h-[16]" src="icons/start-logo.svg" />
-        <T_CLASSIC bold t="Start" />
+        <UiText bold cls={props.theme.startText} t="Start" />
       </View>
-      <View class="w-[1] h-[22] bevel-[#808080,#ffffff]" />
-      <View class="flex-1 flex-row items-center gap-[3] overflow-hidden">
+      <View class={props.theme.taskDivider} />
+      <View class={props.theme.taskList}>
         {props.entries.map((entry) => (
           <View
-            class={
-              entry.id === props.activeId
-                ? "h-[22] flex-row items-center gap-[4] px-[4] bg-[#dfdfdf] bevel-[#808080,#ffffff]"
-                : "h-[22] flex-row items-center gap-[4] px-[4] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]"
-            }
+            class={props.theme.taskButton(entry.id === props.activeId)}
             style={{ width: props.buttonW }}
           >
             <Image class="w-[16] h-[16]" src={entry.icon} />
             <View class="flex-1 flex-row overflow-hidden">
-              <T_CLASSIC bold={entry.id === props.activeId} t={entry.title} />
+              <UiText
+                bold={entry.id === props.activeId}
+                cls={props.theme.taskText(entry.id === props.activeId)}
+                t={entry.title}
+              />
             </View>
           </View>
         ))}
       </View>
-      <View class="h-[22] flex-row items-center px-[8] bevel-[#808080,#ffffff]">
-        <T_CLASSIC t={props.clock} />
+      <View class={props.theme.tray}>
+        <UiText cls={props.theme.trayText} t={props.clock} />
       </View>
     </View>
   );
 }
 
 /** Generic popup menu panel (context menus, dropdowns, start flyouts). */
-export function PopupPanel(props: { popup: Popup; hover: number }) {
+export function PopupPanel(props: {
+  popup: Popup;
+  hover: number;
+  theme: DesktopTheme;
+}) {
   return (
     <View
-      class="absolute flex-col bg-[#c0c0c0] p-[1] bevel-[#dfdfdf,#000000,#ffffff,#808080]"
+      class={props.theme.popup}
       style={{
         insetL: 0,
         insetT: 0,
@@ -141,16 +139,14 @@ export function PopupPanel(props: { popup: Popup; hover: number }) {
       {props.popup.items.map((item, i) =>
         item.sep ? (
           <View class="h-[8] flex-col justify-center px-[1]">
-            <View class="h-[1] bg-[#808080]" />
-            <View class="h-[1] bg-[#ffffff]" />
+            <View class={props.theme.popupSeparatorDark} />
+            <View class={props.theme.popupSeparatorLight} />
           </View>
         ) : (
           <View
-            class={
-              props.hover === i && !item.disabled
-                ? "h-[18] flex-row items-center gap-[5] pl-[4] pr-[8] bg-[#000080]"
-                : "h-[18] flex-row items-center gap-[5] pl-[4] pr-[8]"
-            }
+            class={props.theme.popupItem(
+              props.hover === i && !item.disabled,
+            )}
           >
             {item.checked ? (
               <Image class="w-[16] h-[16]" src="icons/check-16.svg" />
@@ -160,26 +156,26 @@ export function PopupPanel(props: { popup: Popup; hover: number }) {
               <View class="w-[16] h-[16]" />
             )}
             <View class="flex-1 flex-row">
-              <T_CLASSIC
-                cls={
+              <UiText
+                cls={props.theme.popupText(
                   item.disabled
-                    ? "text-[#808080]"
+                    ? "disabled"
                     : props.hover === i
-                      ? "text-[#ffffff]"
-                      : "text-[#000000]"
-                }
+                      ? "hover"
+                      : "normal",
+                )}
                 t={item.label}
               />
             </View>
             {item.shortcut ? (
-              <T_CLASSIC
-                cls={
+              <UiText
+                cls={props.theme.popupText(
                   item.disabled
-                    ? "text-[#808080]"
+                    ? "disabled"
                     : props.hover === i
-                      ? "text-[#ffffff]"
-                      : "text-[#000000]"
-                }
+                      ? "hover"
+                      : "normal",
+                )}
                 t={item.shortcut}
               />
             ) : null}
@@ -193,18 +189,18 @@ export function PopupPanel(props: { popup: Popup; hover: number }) {
   );
 }
 
-/** The Start menu: a plain navy gradient banner strip + 26px rows (flyouts
- *  render as PopupPanels). */
+/** The Start menu: theme rail + 26px rows; flyouts render as PopupPanels. */
 export function StartMenu(props: {
   x: number;
   y: number;
   h: number;
   items: Popup["items"];
   hover: number;
+  theme: DesktopTheme;
 }) {
   return (
     <View
-      class="absolute flex-row bg-[#c0c0c0] p-[1] bevel-[#dfdfdf,#000000,#ffffff,#808080]"
+      class={props.theme.startMenu}
       style={{
         insetL: 0,
         insetT: 0,
@@ -215,32 +211,30 @@ export function StartMenu(props: {
         zIndex: 19000,
       }}
     >
-      <View class="w-[24] h-full bg-gradient-to-t from-[#000080] to-[#1084d0]" />
+      <View class={props.theme.startRail} />
       <View class="flex-1 flex-col">
         {props.items.map((item, i) =>
           item.sep ? (
             <View class="h-[8] flex-col justify-center px-[2]">
-              <View class="h-[1] bg-[#808080]" />
-              <View class="h-[1] bg-[#ffffff]" />
+              <View class={props.theme.popupSeparatorDark} />
+              <View class={props.theme.popupSeparatorLight} />
             </View>
           ) : (
             <View
-              class={
-                props.hover === i && !item.disabled
-                  ? "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#000080]"
-                  : "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6]"
-              }
+              class={props.theme.startItem(
+                props.hover === i && !item.disabled,
+              )}
             >
               <Image class="w-[16] h-[16]" src={item.icon ?? ""} />
               <View class="flex-1 flex-row">
-                <T_CLASSIC
-                  cls={
+                <UiText
+                  cls={props.theme.popupText(
                     item.disabled
-                      ? "text-[#808080]"
+                      ? "disabled"
                       : props.hover === i
-                        ? "text-[#ffffff]"
-                        : "text-[#000000]"
-                  }
+                        ? "hover"
+                        : "normal",
+                  )}
                   t={item.label}
                 />
               </View>
@@ -255,11 +249,12 @@ export function StartMenu(props: {
   );
 }
 
-/** Desktop icons: column-major 32px art + labels, teal behind. */
+/** Desktop icons: column-major 32px art + theme-selected labels. */
 export function DesktopIcons(props: {
   icons: DeskIcon[];
   selected: number;
   rows: number;
+  theme: DesktopTheme;
 }) {
   return (
     <View class="absolute inset-0">
@@ -272,8 +267,10 @@ export function DesktopIcons(props: {
           }}
         >
           <Image class="w-[32] h-[32]" src={icon.icon} />
-          <View class={props.selected === i ? "bg-[#000080] px-[2]" : "px-[2]"}>
-            <T_CLASSIC cls="text-[#ffffff]" t={icon.label} />
+          <View
+            class={props.selected === i ? props.theme.desktopSelection : "px-[2]"}
+          >
+            <UiText cls={props.theme.desktopLabel} t={icon.label} />
           </View>
         </View>
       ))}

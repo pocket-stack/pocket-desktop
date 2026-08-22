@@ -3,22 +3,16 @@
 // directly (tests/system-ui.test.ts). The compositor (app.tsx) owns the state;
 // this module owns the geometry rules.
 //
-// Chrome anatomy (theme.ts metrics): a window is a face-gray box with a 3px
-// raised frame (padding), an 18px caption (+1px hairline), an optional 18px
-// menu bar, then content. Caption controls sit flush right and flush against
-// each other — [min][zoom][close], each 16×14, 2px under the caption top.
+// Chrome anatomy comes from the active System UI theme. The same metrics feed
+// paint and hit testing so a dynamic theme change cannot leave stale click,
+// drag, resize or compositor-surface geometry behind.
 
 import {
-  BTN_H,
-  BTN_W,
-  FRAME,
-  MENU_H,
-  RESIZE_BAND,
-  RESIZE_CORNER,
-  TASK_H,
-  TITLE_GAP,
-  TITLE_H,
+  CLASSIC_THEME,
+  type ChromeMetrics,
 } from "./theme.ts";
+
+const DEFAULT_METRICS = CLASSIC_THEME.metrics;
 
 export interface Geo {
   x: number;
@@ -35,11 +29,16 @@ export const DESK_ICON_X_STRIDE = 82;
 export const DESK_ICON_Y_STRIDE = 58;
 
 /** Column-major desktop icon grid. More icons add columns while every cell
- *  above the taskbar keeps the same classic 74x48 hit target. */
-export function desktopIconRows(viewportH: number): number {
+ *  above the taskbar keeps the same theme-independent 74x48 hit target. */
+export function desktopIconRows(
+  viewportH: number,
+  metrics: ChromeMetrics = DEFAULT_METRICS,
+): number {
   return Math.max(
     1,
-    Math.floor((viewportH - TASK_H - DESK_ICON_Y * 2) / DESK_ICON_Y_STRIDE),
+    Math.floor(
+      (viewportH - metrics.taskH - DESK_ICON_Y * 2) / DESK_ICON_Y_STRIDE,
+    ),
   );
 }
 
@@ -86,25 +85,50 @@ export interface ChromeOpts {
   menuWidths: readonly number[];
 }
 
-/** Left x of each caption button, right-aligned inside the frame, flush. */
+/** Left x of each caption button, right-aligned with the theme-selected gap. */
 export function captionButtonXs(
   w: number,
   buttons: readonly CaptionButton[],
+  metrics: ChromeMetrics = DEFAULT_METRICS,
 ): number[] {
   const xs: number[] = [];
-  let right = w - FRAME - 2;
+  let right = w - metrics.frame - metrics.buttonRight;
   for (let i = buttons.length - 1; i >= 0; i--) {
-    xs.unshift(right - BTN_W);
-    right -= BTN_W;
+    xs.unshift(right - metrics.buttonW);
+    right -= metrics.buttonW + metrics.buttonGap;
   }
   return xs;
 }
 
 /** Content-area top inside the window (frame + caption + menu bar). */
-export function contentTop(opts: Pick<ChromeOpts, "menuWidths">): number {
+export function contentTop(
+  opts: Pick<ChromeOpts, "menuWidths">,
+  metrics: ChromeMetrics = DEFAULT_METRICS,
+): number {
   return (
-    FRAME + TITLE_H + TITLE_GAP + (opts.menuWidths.length > 0 ? MENU_H : 0)
+    metrics.frame +
+    metrics.titleH +
+    metrics.titleGap +
+    (opts.menuWidths.length > 0 ? metrics.menuH : 0)
   );
+}
+
+/** Change only chrome around an existing client rectangle. Child application
+ *  surfaces depend on this invariant because their resolved logical viewport
+ *  is the client size, independent of the System UI theme. */
+export function reframeGeo(
+  geo: Geo,
+  opts: Pick<ChromeOpts, "menuWidths">,
+  previous: ChromeMetrics,
+  next: ChromeMetrics,
+): Geo {
+  const clientW = geo.w - previous.frame * 2;
+  const clientH = geo.h - previous.frame - contentTop(opts, previous);
+  return {
+    ...geo,
+    w: clientW + next.frame * 2,
+    h: clientH + next.frame + contentTop(opts, next),
+  };
 }
 
 /** Hit-test a point in window-local coordinates against the chrome. */
@@ -113,6 +137,7 @@ export function hitRegion(
   opts: ChromeOpts,
   px: number,
   py: number,
+  metrics: ChromeMetrics = DEFAULT_METRICS,
 ): Region | null {
   const x = px - geo.x;
   const y = py - geo.y;
@@ -120,11 +145,11 @@ export function hitRegion(
 
   // Resize bands claim the outer edge before anything else.
   if (opts.resizable && !opts.maximized) {
-    const corner = RESIZE_CORNER;
-    const n = y < RESIZE_BAND;
-    const s = y >= geo.h - RESIZE_BAND;
-    const w = x < RESIZE_BAND;
-    const e = x >= geo.w - RESIZE_BAND;
+    const corner = metrics.resizeCorner;
+    const n = y < metrics.resizeBand;
+    const s = y >= geo.h - metrics.resizeBand;
+    const w = x < metrics.resizeBand;
+    const e = x >= geo.w - metrics.resizeBand;
     if (n || s || w || e) {
       const nearL = x < corner;
       const nearR = x >= geo.w - corner;
@@ -144,23 +169,28 @@ export function hitRegion(
   }
 
   // Caption strip.
-  if (y >= FRAME && y < FRAME + TITLE_H) {
-    const xs = captionButtonXs(geo.w, opts.buttons);
-    const btnTop = FRAME + 2;
-    if (y >= btnTop && y < btnTop + BTN_H) {
+  if (y >= metrics.frame && y < metrics.frame + metrics.titleH) {
+    const xs = captionButtonXs(geo.w, opts.buttons, metrics);
+    const btnTop = metrics.frame + metrics.buttonTop;
+    if (y >= btnTop && y < btnTop + metrics.buttonH) {
       for (let i = 0; i < xs.length; i++) {
-        if (x >= xs[i] && x < xs[i] + BTN_W) {
+        if (x >= xs[i] && x < xs[i] + metrics.buttonW) {
           return { kind: "button", button: opts.buttons[i] };
         }
       }
     }
-    if (x >= FRAME && x < geo.w - FRAME) return { kind: "caption" };
+    if (x >= metrics.frame && x < geo.w - metrics.frame)
+      return { kind: "caption" };
   }
 
   // Menu bar.
-  const menuTop = FRAME + TITLE_H + TITLE_GAP;
-  if (opts.menuWidths.length > 0 && y >= menuTop && y < menuTop + MENU_H) {
-    let mx = FRAME;
+  const menuTop = metrics.frame + metrics.titleH + metrics.titleGap;
+  if (
+    opts.menuWidths.length > 0 &&
+    y >= menuTop &&
+    y < menuTop + metrics.menuH
+  ) {
+    let mx = metrics.frame;
     for (let i = 0; i < opts.menuWidths.length; i++) {
       if (x >= mx && x < mx + opts.menuWidths[i])
         return { kind: "menu", index: i };
@@ -168,11 +198,16 @@ export function hitRegion(
     }
   }
 
-  const top = contentTop(opts);
-  if (x >= FRAME && x < geo.w - FRAME && y >= top && y < geo.h - FRAME) {
-    return { kind: "content", cx: x - FRAME, cy: y - top };
+  const top = contentTop(opts, metrics);
+  if (
+    x >= metrics.frame &&
+    x < geo.w - metrics.frame &&
+    y >= top &&
+    y < geo.h - metrics.frame
+  ) {
+    return { kind: "content", cx: x - metrics.frame, cy: y - top };
   }
-  return { kind: "caption" }; // frame padding drags like the caption did in 98
+  return { kind: "caption" }; // exposed frame padding drags with the caption
 }
 
 /** Apply a resize drag: dir edge follows the pointer, mins hold, the
@@ -201,16 +236,28 @@ export function resizeGeo(
 
 /** Clamp a moved window so its caption stays reachable: some strip of the
  *  title bar remains on screen and above the taskbar. */
-export function clampMove(geo: Geo, vpW: number, vpH: number): Geo {
+export function clampMove(
+  geo: Geo,
+  vpW: number,
+  vpH: number,
+  metrics: ChromeMetrics = DEFAULT_METRICS,
+): Geo {
   const grip = 48; // px of caption that must stay visible
   const x = Math.min(Math.max(geo.x, grip - geo.w), vpW - grip);
-  const y = Math.min(Math.max(geo.y, 0), vpH - TASK_H - TITLE_H);
+  const y = Math.min(
+    Math.max(geo.y, 0),
+    vpH - metrics.taskH - metrics.titleH,
+  );
   return { ...geo, x, y };
 }
 
 /** Maximized geometry: the desktop minus the taskbar. */
-export function maximizedGeo(vpW: number, vpH: number): Geo {
-  return { x: 0, y: 0, w: vpW, h: vpH - TASK_H };
+export function maximizedGeo(
+  vpW: number,
+  vpH: number,
+  metrics: ChromeMetrics = DEFAULT_METRICS,
+): Geo {
+  return { x: 0, y: 0, w: vpW, h: vpH - metrics.taskH };
 }
 
 /** Cascade position for the i-th opened window. */
@@ -220,9 +267,13 @@ export function cascadePos(
   vpH: number,
   w: number,
   h: number,
+  metrics: ChromeMetrics = DEFAULT_METRICS,
 ): Geo {
   const step = 24;
-  const cols = Math.max(1, Math.floor((vpH - TASK_H - h - 8) / step) + 1);
+  const cols = Math.max(
+    1,
+    Math.floor((vpH - metrics.taskH - h - 8) / step) + 1,
+  );
   const k = i % Math.max(1, cols);
   const x = Math.min(64 + i * step, Math.max(8, vpW - w - 8));
   const y = 28 + k * step;

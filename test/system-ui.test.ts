@@ -14,10 +14,15 @@ import {
   desktopIconRows,
   hitRegion,
   maximizedGeo,
+  reframeGeo,
   resizeGeo,
   type ChromeOpts,
   type Geo,
 } from "../src/system-ui/wm.ts";
+import {
+  CLASSIC_THEME,
+  XP_THEME,
+} from "../src/system-ui/theme.ts";
 import {
   MINES_N,
   MINES_W,
@@ -305,7 +310,7 @@ const OPTS: ChromeOpts = {
 describe("caption buttons", () => {
   test("all three buttons sit flush against each other, flush right", () => {
     const xs = captionButtonXs(400, ["min", "max", "close"]);
-    // close right edge at w - FRAME(3) - 2.
+    // Classic close right edge: width - frame(3) - right inset(2).
     expect(xs[2] + 16).toBe(400 - 3 - 2);
     expect(xs[1]).toBe(xs[2] - 16); // no close gap
     expect(xs[0]).toBe(xs[1] - 16);
@@ -314,6 +319,50 @@ describe("caption buttons", () => {
   test("close-only dialogs place the single button flush right", () => {
     const xs = captionButtonXs(300, ["close"]);
     expect(xs).toEqual([300 - 3 - 2 - 16]);
+  });
+});
+
+describe("dynamic theme geometry", () => {
+  const classic = CLASSIC_THEME.metrics;
+  const xp = XP_THEME.metrics;
+
+  test("XP caption controls use 21px cells with 2px gaps", () => {
+    const xs = captionButtonXs(400, ["min", "max", "close"], xp);
+    expect(xs[2] + xp.buttonW).toBe(400 - xp.frame - xp.buttonRight);
+    expect(xs[1]).toBe(xs[2] - xp.buttonGap - xp.buttonW);
+    expect(xs[0]).toBe(xs[1] - xp.buttonGap - xp.buttonW);
+
+    for (const [i, button] of (["min", "max", "close"] as const).entries()) {
+      const region = hitRegion(
+        GEO,
+        OPTS,
+        GEO.x + xs[i] + 10,
+        GEO.y + xp.frame + xp.buttonTop + 10,
+        xp,
+      );
+      expect(region).toEqual({ kind: "button", button });
+    }
+  });
+
+  test("reframing preserves the exact application client viewport", () => {
+    const original: Geo = { x: 64, y: 28, w: 400, h: 300 };
+    const reframed = reframeGeo(original, OPTS, classic, xp);
+    const client = (geo: Geo, metrics: typeof classic) => ({
+      w: geo.w - metrics.frame * 2,
+      h: geo.h - metrics.frame - contentTop(OPTS, metrics),
+    });
+    expect(client(reframed, xp)).toEqual(client(original, classic));
+    expect(reframeGeo(reframed, OPTS, xp, classic)).toEqual(original);
+  });
+
+  test("XP maximize and icon rows reserve its 30px taskbar", () => {
+    expect(maximizedGeo(800, 600, xp)).toEqual({
+      x: 0,
+      y: 0,
+      w: 800,
+      h: 570,
+    });
+    expect(desktopIconRows(600, xp)).toBe(9);
   });
 });
 
