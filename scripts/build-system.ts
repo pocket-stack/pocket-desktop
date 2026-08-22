@@ -7,6 +7,7 @@ import {
   ROOT,
   projectRootFor,
   resolveDesktopSystem,
+  type DesktopTarget,
 } from "./system-plan.ts";
 
 async function run(command: string[]): Promise<void> {
@@ -19,27 +20,38 @@ async function run(command: string[]): Promise<void> {
   if (code !== 0) throw new Error(`command failed (${code}): ${command.join(" ")}`);
 }
 
-export async function buildDesktopSystem(): Promise<{
+export interface BuildDesktopSystemOptions {
+  target?: DesktopTarget;
+  dist?: string;
+  planDir?: string;
+}
+
+export async function buildDesktopSystem(
+  options: BuildDesktopSystemOptions = {},
+): Promise<{
   systemPlanPath: string;
   applicationCount: number;
 }> {
-  const system = await resolveDesktopSystem();
-  mkdirSync(PLAN_DIR, { recursive: true });
-  mkdirSync(DIST, { recursive: true });
+  const target = options.target ?? "macos-app";
+  const dist = options.dist ?? DIST;
+  const planDir = options.planDir ?? PLAN_DIR;
+  const system = await resolveDesktopSystem(target);
+  mkdirSync(planDir, { recursive: true });
+  mkdirSync(dist, { recursive: true });
   const packages = [system.systemUI, ...system.applications];
   for (const entry of packages) {
-    const planPath = resolve(PLAN_DIR, `${entry.plan.app.output}.plan.json`);
+    const planPath = resolve(planDir, `${entry.plan.app.output}.plan.json`);
     await Bun.write(planPath, JSON.stringify(entry.plan, null, 2) + "\n");
     await run([
       process.execPath,
       resolve(POCKETJS_ROOT, "tools/build.ts"),
       `--plan=${planPath}`,
       `--project-root=${projectRootFor(entry.source)}`,
-      `--outdir=${DIST}`,
+      `--outdir=${dist}`,
     ]);
   }
 
-  const systemPlanPath = resolve(PLAN_DIR, "pocket-desktop.system.plan.json");
+  const systemPlanPath = resolve(planDir, "pocket-desktop.system.plan.json");
   await Bun.write(systemPlanPath, JSON.stringify(system, null, 2) + "\n");
   return { systemPlanPath, applicationCount: system.applications.length };
 }

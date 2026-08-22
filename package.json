@@ -18,6 +18,12 @@
     "check": "bun run typecheck && bun run test && bun run test:sim && bun run test:wrap",
     "build": "bun scripts/macos.ts --build-only",
     "macos": "bun scripts/macos.ts",
+    "build:linux": "bun scripts/linux.ts --build-only",
+    "linux": "bun scripts/linux.ts",
+    "package:linux": "bun scripts/linux.ts --package",
+    "build:web": "bun scripts/web.ts --build-only",
+    "web": "bun scripts/web.ts",
+    "test:web": "bun scripts/web-smoke.ts",
     "capture": "bun scripts/build-sim.ts && bun scripts/capture.ts",
     "bake:fonts": "bun src/system-ui/gen-assets.ts",
     "bake:icons": "bun src/system-ui/gen-icons.ts"
