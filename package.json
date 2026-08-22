@@ -1,0 +1,25 @@
+{
+  "name": "pocket-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "commercialLicense": "SEE COMMERCIAL-LICENSE.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pocket-stack/pocket-desktop.git"
+  },
+  "scripts": {
+    "setup": "git submodule update --init && bun install --cwd vendor/pocketjs --frozen-lockfile && bun scripts/setup.ts",
+    "typecheck": "bun vendor/pocketjs/node_modules/typescript/bin/tsc --noEmit",
+    "test": "bun test test/system-ui.test.ts",
+    "test:sim": "bun scripts/build-sim.ts && bun test --conditions=browser test/system-ui-sim.test.ts",
+    "test:wrap": "bun test --conditions=browser test/wrap-op.test.ts",
+    "check": "bun run typecheck && bun run test && bun run test:sim && bun run test:wrap",
+    "build": "bun scripts/macos.ts --build-only",
+    "macos": "bun scripts/macos.ts",
+    "capture": "bun scripts/build-sim.ts && bun scripts/capture.ts",
+    "bake:fonts": "bun src/system-ui/gen-assets.ts",
+    "bake:icons": "bun src/system-ui/gen-icons.ts"
+  }
+}
