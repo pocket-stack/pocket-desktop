@@ -5,11 +5,16 @@ applications inside one native process. Its System UI owns windows, taskbar,
 application presentation and theme selection; PocketJS owns package
 resolution, AppInstance isolation, scheduling and native composition.
 
-The current `classic` theme is inspired by late-1990s desktop interfaces. The
-product, package ids, artifacts and protocols are theme-neutral so additional
-themes can replace its chrome without changing the Pocket System contract.
+The `classic` theme is inspired by late-1990s desktop interfaces. The `xp`
+theme adapts Sheru's Luna palette, three-stop plastic gradients, caption
+controls, menus and application surfaces to PocketJS-native drawing. **Both
+themes use the same System manifest, AppInstances and native compositor.**
+Choose one from **Start → Settings**, or press **Cmd+Shift+T** to toggle while
+testing.
 
-![Pocket Desktop classic theme](docs/classic-theme.png)
+| Classic 98 | Windows XP |
+|---|---|
+| ![Pocket Desktop classic theme](docs/classic-theme.png) | ![Pocket Desktop XP theme](docs/xp-theme.png) |
 
 ## Architecture
 
@@ -77,8 +82,8 @@ shell's `CompositorSurface` painter positions. `test:web` drives a real
 headless Chrome double-click journey and requires the Hero child raster to
 replace its shell fallback before saving `dist/web-smoke.png`.
 
-Regenerate the checked-in classic-theme screenshot from the deterministic
-PocketJS simulator with `bun run capture`.
+Regenerate both checked-in theme screenshots from the deterministic PocketJS
+simulator with `bun run capture`.
 
 ## Classic baseline benchmark
 
