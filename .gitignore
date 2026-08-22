@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .pocket/
+.wrangler/
 .DS_Store
 vendor/pocketjs/framework/src/styles.generated.ts
 vendor/pocketjs/hosts/web/pocketjs.wasm
