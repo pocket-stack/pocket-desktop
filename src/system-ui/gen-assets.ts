@@ -4,10 +4,21 @@
 //
 //   bun src/system-ui/gen-assets.ts
 //
-// Slots (repo slots 0..18 are Inter/JetBrains Mono; these live app-side):
-//   19  W95FA 12.5px regular — the whole desktop
+// It also bakes the Luna face. Tahoma and Trebuchet MS (the fonts Windows XP
+// actually ships, and the ones sheru's winxp theme names) are Microsoft's and
+// cannot be redistributed, so the XP theme borrows the vendored Inter (OFL) —
+// the same neutral grotesque the framework's own slots use. Luna text is
+// antialiased, so these slots keep their coverage instead of thresholding it
+// the way the W95FA bitmap face does.
+//
+// Slots (spec.ts MAX_FONT_SLOTS is 24 and the framework pins 0..18, so the
+// five app-side slots below are the whole budget — a third XP size would
+// need the contract widened):
+//   19  W95FA 12.5px regular — the whole Classic desktop
 //   20  W95FA 12.5px synthetic bold (GDI smear: 1px max-blend + advance+1)
-//   21  W95FA 25px regular — the Start-menu banner
+//   21  W95FA 25px regular — Classic's About banner
+//   22  Inter 12px regular — the whole XP desktop
+//   23  Inter 12.5px bold — XP captions, task buttons, Start panel headings
 //
 // W95FA is a bitmap-font conversion on an 80-units/px grid at its native
 // 12.5px, with sloppy CFF floats (…129.92 for 130) and a 10-unit x phase.
@@ -187,6 +198,17 @@ function embolden(src: BakedAtlas, slot: number): Uint8Array {
   return out;
 }
 
+/** Luna face: the vendored Inter, baked with its coverage intact. */
+async function bakeLuna(density: number): Promise<[BakedAtlas, BakedAtlas]> {
+  const dir = join(ROOT, "vendor/pocketjs/assets/fonts");
+  const regular = parseFont(await Bun.file(join(dir, "Inter-Regular.ttf")).arrayBuffer());
+  const bold = parseFont(await Bun.file(join(dir, "Inter-Bold.ttf")).arrayBuffer());
+  return [
+    bakeSlot(regular, 22, 12, false, CHARS, density),
+    bakeSlot(bold, 23, 12.5, true, CHARS, density),
+  ];
+}
+
 const font = await loadSnapped();
 
 for (const density of [1, 2]) {
@@ -208,11 +230,15 @@ for (const density of [1, 2]) {
   }
   if (!hCell.some((b) => b > 0)) throw new Error("gen-assets: 'h' baked empty");
   const a20 = embolden(a19, 20);
+  const [a22, a23] = await bakeLuna(density);
   await Bun.write(join(OUT, `w95fa-19${suffix}.bin`), a19.bytes);
   await Bun.write(join(OUT, `w95fa-20${suffix}.bin`), a20);
   await Bun.write(join(OUT, `w95fa-21${suffix}.bin`), a21.bytes);
+  await Bun.write(join(OUT, `inter-22${suffix}.bin`), a22.bytes);
+  await Bun.write(join(OUT, `inter-23${suffix}.bin`), a23.bytes);
   console.log(
     `gen-assets: density ${density} — slot19 ${a19.bytes.length}B (AA ${(aa19 * 100).toFixed(2)}%), ` +
-      `slot20 ${a20.length}B, slot21 ${a21.bytes.length}B (AA ${(aa21 * 100).toFixed(2)}%)`,
+      `slot20 ${a20.length}B, slot21 ${a21.bytes.length}B (AA ${(aa21 * 100).toFixed(2)}%), ` +
+      `slot22 ${a22.bytes.length}B, slot23 ${a23.bytes.length}B`,
   );
 }

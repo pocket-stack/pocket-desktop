@@ -36,10 +36,13 @@ import {
   maximizedGeo,
   reframeGeo,
   resizeGeo,
+  startLayout,
+  startRowAt,
   type CaptionButton,
   type Dir,
   type Geo,
   type Region,
+  type StartRow,
 } from "./wm.ts";
 import {
   createWin,
@@ -69,7 +72,7 @@ import {
   NotepadView,
   PAD_LINE_H,
   padSegs,
-  padWidth,
+  padWidthFor,
   padWrapW,
   PocketAppView,
   SHUTDOWN_GEO,
@@ -117,6 +120,7 @@ import {
   DesktopIcons,
   PopupPanel,
   StartMenu,
+  StartPanel,
   UiText,
   Taskbar,
 } from "./chrome.tsx";
@@ -192,6 +196,7 @@ function DesktopWindow(props: {
         <Image class={props.theme.captionIcon} src={w.icon} />
         <View class="flex-1 flex-row overflow-hidden">
           <UiText
+            theme={props.theme}
             bold
             cls={props.theme.captionTitle(props.active)}
             t={w.title}
@@ -207,6 +212,7 @@ function DesktopWindow(props: {
                 class={props.theme.menuItem(w.openMenu.value === i)}
               >
                 <UiText
+                  theme={props.theme}
                   cls={props.theme.menuText(w.openMenu.value === i)}
                   t={menu.label}
                 />
@@ -264,6 +270,7 @@ export default function App() {
   const themeId = ref<ThemeId>("classic");
   const theme = () => themeById(themeId.value);
   const metrics = () => theme().metrics;
+  const uiSlot = () => theme().fontSlot("ui");
 
   // Non-reactive input state (nothing renders from these directly).
   let stack: number[] = []; // window ids, bottom → top
@@ -346,6 +353,9 @@ export default function App() {
     const next = themeById(nextId).metrics;
     themeId.value = nextId;
     for (const w of wins.value) {
+      // Menu-bar hit widths were measured in the outgoing face.
+      for (const menu of w.menus ?? [])
+        menu.width = measure(menu.label, uiSlot()) + 12;
       const opts = chromeOpts(w);
       const minimum = reframeGeo(
         { x: 0, y: 0, w: w.minW, h: w.minH },
@@ -437,7 +447,7 @@ export default function App() {
       menus: [
         {
           label: "File",
-          width: measure("File") + 12,
+          width: measure("File", uiSlot()) + 12,
           items: () => [
             {
               label: "New",
@@ -460,7 +470,7 @@ export default function App() {
         },
         {
           label: "Edit",
-          width: measure("Edit") + 12,
+          width: measure("Edit", uiSlot()) + 12,
           items: () => [
             {
               label: "Undo",
@@ -520,7 +530,7 @@ export default function App() {
         },
         {
           label: "Help",
-          width: measure("Help") + 12,
+          width: measure("Help", uiSlot()) + 12,
           items: () => [{ label: "About Pocket Desktop", act: openAbout }],
         },
       ],
@@ -541,7 +551,12 @@ export default function App() {
     };
     const outer = reframeGeo(
       { x: 0, y: 0, w: MINES_GEO.w, h: MINES_GEO.h },
-      { menuWidths: [measure("Game") + 12, measure("Help") + 12] },
+      {
+        menuWidths: [
+          measure("Game", uiSlot()) + 12,
+          measure("Help", uiSlot()) + 12,
+        ],
+      },
       CLASSIC_THEME.metrics,
       metrics(),
     );
@@ -564,7 +579,7 @@ export default function App() {
       menus: [
         {
           label: "Game",
-          width: measure("Game") + 12,
+          width: measure("Game", uiSlot()) + 12,
           items: () => [
             {
               label: "New",
@@ -585,7 +600,7 @@ export default function App() {
         },
         {
           label: "Help",
-          width: measure("Help") + 12,
+          width: measure("Help", uiSlot()) + 12,
           items: () => [{ label: "About Pocket Desktop", act: openAbout }],
         },
       ],
@@ -852,7 +867,108 @@ export default function App() {
     );
   }
 
-  const startItems = (): PopupItem[] => [
+  /** Programs flyout contents — the Classic "Programs" submenu and the XP
+   *  panel's "All Programs" share one list. */
+  const programItems = (): PopupItem[] => [
+    {
+      label: "Notepad",
+      icon: "icons/notepad-16.svg",
+      act: () => {
+        openNotepad("Untitled - Notepad", [""]);
+      },
+    },
+    { label: "Minesweeper", icon: "icons/mines-16.svg", act: openMines },
+    ...POCKET_APPS.map((app) => ({
+      label: app.title,
+      icon: POCKET_ICON_SMALL,
+      act: () => openPocketApp(app),
+    })),
+  ];
+
+  const themeItems = (): PopupItem[] =>
+    THEMES.map((item) => ({
+      label: item.label,
+      checked: item.id === themeId.value,
+      act: () => {
+        setTheme(item.id);
+      },
+    }));
+
+  const documentItems = (): PopupItem[] => [
+    {
+      label: "welcome.txt",
+      icon: "icons/notepad-16.svg",
+      act: () => {
+        openNotepad("welcome.txt - Notepad", WELCOME);
+      },
+    },
+  ];
+
+  /** XP's panel: pinned programs and recent apps on the left, places and
+   *  system entries on the right, Turn Off Computer in the bottom strip. */
+  const xpStartItems = (): PopupItem[] => [
+    {
+      label: "Notepad",
+      icon: "icons/notepad-16.svg",
+      act: () => {
+        openNotepad("Untitled - Notepad", [""]);
+      },
+    },
+    { label: "Minesweeper", icon: "icons/mines-16.svg", act: openMines },
+    { sep: true, label: "" },
+    ...POCKET_APPS.slice(0, 5).map((app) => ({
+      label: app.title,
+      icon: POCKET_ICON_SMALL,
+      act: () => openPocketApp(app),
+    })),
+    { sep: true, label: "", bottom: true },
+    {
+      label: "All Programs",
+      icon: "icons/folder-16.svg",
+      bottom: true,
+      sub: programItems(),
+    },
+    {
+      label: "My Documents",
+      icon: "icons/folder-16.svg",
+      col: "right",
+      sub: documentItems(),
+    },
+    {
+      label: "My Computer",
+      icon: "icons/computer-16.svg",
+      col: "right",
+      act: openMyComputer,
+    },
+    { sep: true, label: "", col: "right" },
+    {
+      label: "Settings",
+      icon: "icons/settings-16.svg",
+      col: "right",
+      sub: themeItems(),
+    },
+    {
+      label: "Help",
+      icon: "icons/help-16.svg",
+      col: "right",
+      act: openAbout,
+    },
+    { sep: true, label: "", col: "right" },
+    {
+      label: "Run...",
+      icon: "icons/run-16.svg",
+      col: "right",
+      disabled: true,
+    },
+    {
+      label: "Turn Off Computer",
+      icon: "icons/xp-power.svg",
+      foot: true,
+      act: openShutdown,
+    },
+  ];
+
+  const classicStartItems = (): PopupItem[] => [
     {
       label: "Programs",
       icon: "icons/folder-16.svg",
@@ -903,22 +1019,18 @@ export default function App() {
     { label: "Shut Down...", icon: "icons/shutdown-16.svg", act: openShutdown },
   ];
 
-  const START_ROW = 26;
-  const START_SEP = 8;
-  const startH = () =>
-    2 + startItems().reduce((a, it) => a + (it.sep ? START_SEP : START_ROW), 0);
-  const startY = () => vp.value.h - metrics().taskH - startH();
+  /** Separator height inside dropdown popups (the Start panel's own comes
+   *  from the theme metrics). */
+  const POPUP_SEP = 8;
+
+  const startItems = (): PopupItem[] =>
+    metrics().startHeaderH > 0 ? xpStartItems() : classicStartItems();
+
+  /** The panel rectangle both the render and hit testing read. */
+  const startGeo = () => startLayout(startItems(), vp.value.h, metrics());
 
   function startItemAt(x: number, y: number): number {
-    const items = startItems();
-    if (x < 2 + 25 || x >= 2 + 182 - 1) return -1;
-    let oy = startY() + 1;
-    for (let i = 0; i < items.length; i++) {
-      const h = items[i].sep ? START_SEP : START_ROW;
-      if (y >= oy && y < oy + h) return items[i].sep ? -1 : i;
-      oy += h;
-    }
-    return -1;
+    return startRowAt(startGeo(), x, y);
   }
 
   function buildPopup(x: number, y: number, items: PopupItem[]): Popup {
@@ -928,13 +1040,13 @@ export default function App() {
       w = Math.max(
         w,
         26 +
-          measure(it.label) +
-          (it.shortcut ? 20 + measure(it.shortcut) : 0) +
+          measure(it.label, uiSlot()) +
+          (it.shortcut ? 20 + measure(it.shortcut, uiSlot()) : 0) +
           (it.sub ? 14 : 0) +
           14,
       );
     }
-    const h = 2 + items.reduce((a, it) => a + (it.sep ? START_SEP : 18), 0);
+    const h = 2 + items.reduce((a, it) => a + (it.sep ? POPUP_SEP : 18), 0);
     return {
       x: Math.min(x, vp.value.w - w - 2),
       y: Math.min(y, vp.value.h - metrics().taskH - h),
@@ -947,7 +1059,7 @@ export default function App() {
     if (x < p.x + 1 || x >= p.x + p.w - 1) return -1;
     let oy = p.y + 1;
     for (let i = 0; i < p.items.length; i++) {
-      const h = p.items[i].sep ? START_SEP : 18;
+      const h = p.items[i].sep ? POPUP_SEP : 18;
       if (y >= oy && y < oy + h) return p.items[i].sep ? -1 : i;
       oy += h;
     }
@@ -1029,11 +1141,11 @@ export default function App() {
     const d = padOf(w);
     const vrow = Math.floor((cy - 3 + d.scroll.value) / PAD_LINE_H);
     return caretAtPoint(
-      padSegs(w, metrics().frame),
+      padSegs(w, metrics().frame, uiSlot()),
       d.doc.value.lines,
       vrow,
       cx - 3,
-      padWidth,
+      padWidthFor(uiSlot()),
     );
   }
 
@@ -1337,12 +1449,15 @@ export default function App() {
         const item = startItems()[i];
         if (item.sub) {
           if (startFly.value?.index !== i) {
-            let oy = startY() + 1;
-            for (let k = 0; k < i; k++)
-              oy += startItems()[k].sep ? START_SEP : START_ROW;
+            const geo = startGeo();
+            const row = geo.rows.find((r: StartRow) => r.index === i);
             startFly.value = {
               index: i,
-              popup: buildPopup(2 + 182 - 3, oy, item.sub),
+              popup: buildPopup(
+                (row?.x ?? geo.x) + (row?.w ?? geo.w) - 3,
+                row?.y ?? geo.y,
+                item.sub,
+              ),
             };
             flyHover.value = -1;
           }
@@ -1683,8 +1798,8 @@ export default function App() {
             doc,
             k as CaretMove,
             ev.sh ?? false,
-            padSegs(w, metrics().frame),
-            padWidth,
+            padSegs(w, metrics().frame, uiSlot()),
+            padWidthFor(uiSlot()),
           );
           break;
         default:
@@ -1714,10 +1829,10 @@ export default function App() {
   function scrollCaretIntoView(w: WinCtl) {
     const d = padOf(w);
     const vrow = caretXY(
-      padSegs(w, metrics().frame),
+      padSegs(w, metrics().frame, uiSlot()),
       d.doc.value.lines,
       d.doc.value.caret,
-      padWidth,
+      padWidthFor(uiSlot()),
     ).vrow;
     const y = vrow * PAD_LINE_H;
     const viewH = padViewH(w);
@@ -1871,7 +1986,7 @@ export default function App() {
         if (hover?.win.kind === "notepad") {
           const d = padOf(hover.win);
           const contentH =
-            padSegs(hover.win, metrics().frame).length * PAD_LINE_H + 6;
+            padSegs(hover.win, metrics().frame, uiSlot()).length * PAD_LINE_H + 6;
           const maxY = Math.max(0, contentH - padViewH(hover.win));
           d.scroll.value = Math.max(
             0,
@@ -1921,10 +2036,10 @@ export default function App() {
       const g = fw.geo.value;
       const doc = d.doc.value;
       const pos = caretXY(
-        padSegs(fw, metrics().frame),
+        padSegs(fw, metrics().frame, uiSlot()),
         doc.lines,
         doc.caret,
-        padWidth,
+        padWidthFor(uiSlot()),
       );
       const x = g.x + metrics().frame + 4 + pos.x;
       const y =
@@ -1961,11 +2076,24 @@ export default function App() {
           theme={theme()}
         />
       ))}
-      {startOpen.value ? (
+      {startOpen.value && metrics().startHeaderH > 0 ? (
+        <StartPanel
+          x={startGeo().x}
+          y={startGeo().y}
+          w={startGeo().w}
+          h={startGeo().h}
+          items={startItems()}
+          hover={startHover.value}
+          user="Pocket"
+          theme={theme()}
+        />
+      ) : null}
+      {startOpen.value && metrics().startHeaderH === 0 ? (
         <StartMenu
-          x={2}
-          y={startY()}
-          h={startH()}
+          x={startGeo().x}
+          y={startGeo().y}
+          w={startGeo().w}
+          h={startGeo().h}
           items={startItems()}
           hover={startHover.value}
           theme={theme()}

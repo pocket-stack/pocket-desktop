@@ -33,9 +33,9 @@ import type {
   WinCtl,
 } from "./state.ts";
 
-export function measure(s: string): number {
+export function measure(s: string, slot: number): number {
   const ops = getOps();
-  return ops.measureText ? ops.measureText(s, FONT) : s.length * 7;
+  return ops.measureText ? ops.measureText(s, slot) : s.length * 7;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,16 +50,24 @@ export const PAD_PAD = 3; // inset of the text from the white well
 // exact forever; the atlas never changes at runtime).
 const widthCache = new Map<string, number>();
 
-/** Cached slot-19 width — the `width` function every wrap helper takes. */
-export function padWidth(s: string): number {
+/** Cached width in one baked slot — the `width` function every wrap helper
+ *  takes. The key carries the slot: a theme switch changes the face under
+ *  the same strings. */
+export function padWidth(s: string, slot: number): number {
   if (s === "") return 0;
-  let w = widthCache.get(s);
+  const key = `${slot}\u0000${s}`;
+  let w = widthCache.get(key);
   if (w === undefined) {
     if (widthCache.size > 4096) widthCache.clear();
-    w = measure(s);
-    widthCache.set(s, w);
+    w = measure(s, slot);
+    widthCache.set(key, w);
   }
   return w;
+}
+
+/** `padWidth` bound to a slot, for the pure helpers that take a measurer. */
+export function padWidthFor(slot: number): (s: string) => number {
+  return (s) => padWidth(s, slot);
 }
 
 /** Wrap width for a notepad window: the content well minus the 3px text
@@ -79,19 +87,24 @@ export function padWrapW(w: WinCtl, frame: number): number {
 function wrapLineHost(
   line: string,
   maxW: number,
+  slot: number,
 ): { from: number; to: number }[] {
   const ops = getOps();
   if (Number.isFinite(maxW) && ops.wrapText) {
-    return segsFromBreaks(line.length, ops.wrapText(line, FONT, maxW));
+    return segsFromBreaks(line.length, ops.wrapText(line, slot, maxW));
   }
-  return wrapLine(line, maxW, padWidth);
+  return wrapLine(line, maxW, padWidthFor(slot));
 }
 
 /** The whole document as visual segments through the host/fallback path. */
-export function wrapDocHost(lines: string[], maxW: number): VSeg[] {
+export function wrapDocHost(
+  lines: string[],
+  maxW: number,
+  slot: number,
+): VSeg[] {
   const out: VSeg[] = [];
   for (let row = 0; row < lines.length; row++) {
-    for (const s of wrapLineHost(lines[row], maxW))
+    for (const s of wrapLineHost(lines[row], maxW, slot))
       out.push({ row, from: s.from, to: s.to });
   }
   return out;
@@ -99,9 +112,9 @@ export function wrapDocHost(lines: string[], maxW: number): VSeg[] {
 
 /** The window's visual segments — the ONE layout both the render below and
  *  app.tsx hit-testing/caret movement read. */
-export function padSegs(w: WinCtl, frame: number): VSeg[] {
+export function padSegs(w: WinCtl, frame: number, slot: number): VSeg[] {
   const d = w.data as PadData;
-  return wrapDocHost(d.doc.value.lines, padWrapW(w, frame));
+  return wrapDocHost(d.doc.value.lines, padWrapW(w, frame), slot);
 }
 
 export function NotepadView(props: {
@@ -111,12 +124,13 @@ export function NotepadView(props: {
   theme: DesktopTheme;
 }) {
   const d = props.data;
-  const segsAll = () => wrapDocHost(d.doc.value.lines, props.wrapW);
+  const slot = () => props.theme.fontSlot("ui");
+  const segsAll = () => wrapDocHost(d.doc.value.lines, props.wrapW, slot());
   const caretPos = () =>
-    caretXY(segsAll(), d.doc.value.lines, d.doc.value.caret, padWidth);
+    caretXY(segsAll(), d.doc.value.lines, d.doc.value.caret, padWidthFor(slot()));
   const caretX = () => {
     const pre = d.preedit.value;
-    return caretPos().x + (pre ? padWidth(pre.s.slice(0, pre.c)) : 0);
+    return caretPos().x + (pre ? padWidth(pre.s.slice(0, pre.c), slot()) : 0);
   };
   /** Visual-segment text split at the selection edges. */
   const parts = (seg: VSeg): { t: string; sel: boolean }[] => {
@@ -141,16 +155,18 @@ export function NotepadView(props: {
               {vi === caretPos().vrow && d.preedit.value
                 ? [
                     <UiText
+                      theme={props.theme}
                       t={d.doc.value.lines[seg.row].slice(
                         seg.from,
                         d.doc.value.caret.col,
                       )}
                     />,
                     <View class="flex-col">
-                      <UiText t={d.preedit.value.s} />
+                      <UiText theme={props.theme} t={d.preedit.value.s} />
                       <View class="h-[1] bg-[#000000]" />
                     </View>,
                     <UiText
+                      theme={props.theme}
                       t={d.doc.value.lines[seg.row].slice(
                         d.doc.value.caret.col,
                         seg.to,
@@ -160,10 +176,10 @@ export function NotepadView(props: {
                 : parts(seg).map((p) =>
                     p.sel ? (
                       <View class={props.theme.selection}>
-                        <UiText cls={props.theme.selectionText} t={p.t} />
+                        <UiText theme={props.theme} cls={props.theme.selectionText} t={p.t} />
                       </View>
                     ) : (
-                      <UiText t={p.t} />
+                      <UiText theme={props.theme} t={p.t} />
                     ),
                   )}
             </View>
@@ -200,8 +216,8 @@ export function PocketAppView(props: {
     <View class="flex-1 relative overflow-hidden bg-[#000000]">
       <View class={props.theme.pocketLoading}>
         <Image class="w-[32] h-[32] mb-[8]" src="icons/pocket-app.svg" />
-        <UiText t={`Starting ${props.data.app.title}...`} />
-        <UiText cls={props.theme.mutedText} t="Arrow keys + Z/X/A/S + Q/W" />
+        <UiText theme={props.theme} t={`Starting ${props.data.app.title}...`} />
+        <UiText theme={props.theme} cls={props.theme.mutedText} t="Arrow keys + Z/X/A/S + Q/W" />
       </View>
       <CompositorSurface
         class="absolute inset-0"
@@ -348,7 +364,7 @@ function Counter(props: { value: number }) {
 
 /** One field cell: raised while hidden, flat when revealed (red on the bust
  *  mine), flag/mine art, colored adjacency digit. */
-function MinesCell(props: { data: MinesData; i: number }) {
+function MinesCell(props: { data: MinesData; i: number; theme: DesktopTheme }) {
   const c = (): Cell => props.data.board.value.cells[props.i];
   const heldDown = () =>
     props.data.held.value === props.i && c().state === "hidden";
@@ -380,6 +396,7 @@ function MinesCell(props: { data: MinesData; i: number }) {
             <Image class="w-[8] h-[8]" src="icons/mine.svg" />
           ) : c().adj > 0 ? (
             <UiText
+              theme={props.theme}
               bold
               cls={NUM_COLORS[c().adj] || "text-[#000000]"}
               t={String(c().adj)}
@@ -429,7 +446,7 @@ export function MinesView(props: {
         {ROWS9.map((ry) => (
           <View class="flex-row">
             {ROWS9.map((rx) => (
-              <MinesCell data={d} i={ry * MINES_W + rx} />
+              <MinesCell data={d} i={ry * MINES_W + rx} theme={props.theme} />
             ))}
           </View>
         ))}
@@ -463,13 +480,13 @@ export function FolderView(props: {
       <View class={props.theme.folderWell}>
         <View class="h-[17] flex-row shrink-0">
           <View class={props.theme.folderHeader("name")}>
-            <UiText t="Name" />
+            <UiText theme={props.theme} t="Name" />
           </View>
           <View class={props.theme.folderHeader("size")}>
-            <UiText t="Size" />
+            <UiText theme={props.theme} t="Size" />
           </View>
           <View class={props.theme.folderHeader("type")}>
-            <UiText t="Type" />
+            <UiText theme={props.theme} t="Type" />
           </View>
         </View>
         {d.rows.map((row, i) => (
@@ -479,6 +496,7 @@ export function FolderView(props: {
             <Image class="w-[16] h-[16] mr-[4]" src={row.icon} />
             <View class="flex-1 flex-row overflow-hidden">
               <UiText
+                theme={props.theme}
                 cls={
                   d.selected.value === i
                     ? props.theme.selectionText
@@ -489,6 +507,7 @@ export function FolderView(props: {
             </View>
             <View class="w-[60] flex-row justify-end">
               <UiText
+                theme={props.theme}
                 cls={
                   d.selected.value === i
                     ? props.theme.selectionText
@@ -499,6 +518,7 @@ export function FolderView(props: {
             </View>
             <View class="w-[100] flex-row pl-[6]">
               <UiText
+                theme={props.theme}
                 cls={
                   d.selected.value === i
                     ? props.theme.selectionText
@@ -511,13 +531,13 @@ export function FolderView(props: {
         ))}
         {d.rows.length === 0 ? (
           <View class="flex-1 flex-col justify-center items-center">
-            <UiText cls={props.theme.mutedText} t="(empty)" />
+            <UiText theme={props.theme} cls={props.theme.mutedText} t="(empty)" />
           </View>
         ) : null}
       </View>
       <View class="h-[20] flex-row items-end gap-[2] pt-[2]">
         <View class={props.theme.statusWell}>
-          <UiText t={`${d.rows.length} object(s)`} />
+          <UiText theme={props.theme} t={`${d.rows.length} object(s)`} />
         </View>
         {props.resizable ? (
           <Image class="w-[16] h-[16]" src="icons/grip.svg" />
@@ -543,7 +563,7 @@ function DialogButton(props: {
   return (
     <View class={props.theme.dialogButton(props.armed)}>
       <View class={props.armed ? "ml-[1] mt-[1]" : ""}>
-        <UiText t={props.label} />
+        <UiText theme={props.theme} t={props.label} />
       </View>
     </View>
   );
@@ -569,17 +589,18 @@ export function AboutView(props: {
     <View class="flex-1 flex-col p-[10] gap-[8]">
       <View class="flex-row items-center gap-[10]">
         <Image class="w-[32] h-[32]" src="icons/computer.svg" />
-        <UiText xl t="Pocket Desktop" />
+        <UiText theme={props.theme} xl t="Pocket Desktop" />
       </View>
       <View class="h-[2] flex-col">
         <View class="h-[1] bg-[#808080]" />
         <View class="h-[1] bg-[#ffffff]" />
       </View>
-      <UiText t="A desktop compositor demo on the gpui backend." />
-      <UiText t="Vue Vapor JSX over the same DrawList the" />
-      <UiText t="consoles boot; windows, menus and shortcuts" />
-      <UiText t="live in the guest." />
+      <UiText theme={props.theme} t="A desktop compositor demo on the gpui backend." />
+      <UiText theme={props.theme} t="Vue Vapor JSX over the same DrawList the" />
+      <UiText theme={props.theme} t="consoles boot; windows, menus and shortcuts" />
+      <UiText theme={props.theme} t="live in the guest." />
       <UiText
+        theme={props.theme}
         cls={props.theme.mutedText}
         t="github.com/pocket-stack/pocket-desktop"
       />
@@ -631,7 +652,7 @@ export function ShutdownView(props: {
           ) : null}
         </View>
       </View>
-      <UiText t={label} />
+      <UiText theme={props.theme} t={label} />
     </View>
   );
   return (
@@ -639,7 +660,7 @@ export function ShutdownView(props: {
       <View class="flex-row items-start gap-[10]">
         <Image class="w-[32] h-[32]" src="icons/shutdown.svg" />
         <View class="flex-col gap-[2]">
-          <UiText t="What do you want the computer to do?" />
+          <UiText theme={props.theme} t="What do you want the computer to do?" />
         </View>
       </View>
       <View class="h-[10]" />
