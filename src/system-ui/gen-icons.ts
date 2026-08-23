@@ -441,95 +441,7 @@ const NATIVE: Icon[] = [
     file: "cap-close.svg",
     rows: ["........", "kk....kk", ".kk..kk.", "..kkkk..", "...kk...", "..kkkk..", ".kk..kk.", "kk....kk"],
   },
-  {
-    // Luna caption glyphs are white 2px strokes on a 10px mark, centred in
-    // a 16px tile (pak images are power-of-two): the 21px gel cells carry a
-    // much larger mark than the 16px classic buttons. They keep their own
-    // files so switching themes never needs image tinting.
-    file: "xp-cap-min.svg",
-    rows: [
-      "................",
-      "................",
-      "................",
-      "................",
-      "................",
-      "................",
-      "................",
-      "................",
-      "................",
-      "................",
-      "....wwwwwwww....",
-      "....wwwwwwww....",
-      "................",
-      "................",
-      "................",
-      "................",
-    ],
-  },
-  {
-    file: "xp-cap-max.svg",
-    rows: [
-      "................",
-      "................",
-      "................",
-      "...wwwwwwwwww...",
-      "...wwwwwwwwww...",
-      "...w........w...",
-      "...w........w...",
-      "...w........w...",
-      "...w........w...",
-      "...w........w...",
-      "...w........w...",
-      "...w........w...",
-      "...wwwwwwwwww...",
-      "................",
-      "................",
-      "................",
-    ],
-  },
-  {
-    file: "xp-cap-restore.svg",
-    rows: [
-      "................",
-      "................",
-      "................",
-      "......wwwwwww...",
-      "......wwwwwww...",
-      "......w.....w...",
-      "......w.....w...",
-      "...wwwwww...w...",
-      "...wwwwww...w...",
-      "...w....wwwww...",
-      "...w....w.......",
-      "...w....w.......",
-      "...wwwwww.......",
-      "................",
-      "................",
-      "................",
-    ],
-  },
-  {
-    file: "xp-cap-close.svg",
-    rows: [
-      "................",
-      "................",
-      "................",
-      "...ww......ww...",
-      "...www....www...",
-      "....www..www....",
-      ".....wwwwww.....",
-      "......wwww......",
-      "......wwww......",
-      ".....wwwwww.....",
-      "....www..www....",
-      "...www....www...",
-      "...ww......ww...",
-      "................",
-      "................",
-      "................",
-    ],
-  },
-  {
+   {
     file: "menu-arrow.svg",
     rows: ["........", "..k.....", "..kk....", "..kkk...", "..kkkk..", "..kkk...", "..kk....", "..k....."],
   },
@@ -690,6 +602,94 @@ for (const icon of ICONS) {
     await Bun.write(join(outDir, icon.big), svgFor(icon.rows, 2));
     count++;
   }
+}
+// Luna caption glyphs are drawn, not gridded: at 21px the cell carries a
+// ~10px mark whose diagonals must stay smooth, and the pixel grids the rest
+// of this file emits stair-step the moment the host bakes them at 2x. These
+// are plain filled shapes (bake-svg does fills, never strokes) in a 16px
+// power-of-two tile, so the bar ends land on whole pixels while the X keeps
+// analytic coverage on its slopes.
+interface VectorIcon {
+  file: string;
+  body: string;
+  /** Tile size; pak images are power-of-two, so 16 or 32. */
+  size?: number;
+}
+
+/** One diagonal bar of the close mark, as a filled quad. */
+function bar(x0: number, y0: number, x1: number, y1: number, w: number): string {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  const nx = (-dy / len) * (w / 2);
+  const ny = (dx / len) * (w / 2);
+  const p = (x: number, y: number) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`;
+  return `M${p(x0 + nx, y0 + ny)}L${p(x1 + nx, y1 + ny)}L${p(x1 - nx, y1 - ny)}L${p(x0 - nx, y0 - ny)}z`;
+}
+
+const VECTORS: VectorIcon[] = [
+  {
+    file: "xp-cap-close.svg",
+    body: `<path fill="#ffffff" d="${bar(3.4, 3.4, 12.6, 12.6, 2.6)}${bar(12.6, 3.4, 3.4, 12.6, 2.6)}"/>`,
+  },
+  {
+    // Turn Off Computer: Luna's red plate with the power mark.
+    file: "xp-power.svg",
+    body:
+      '<rect x="1" y="1" width="14" height="14" rx="3" fill="#b13a2a"/>' +
+      '<rect x="2" y="2" width="12" height="12" rx="2" fill="#e2543c"/>' +
+      // A ring cut by the plate colour, then the bar: bake-svg fills
+      // circles, rects and polygonal paths — never arcs.
+      '<circle cx="8" cy="9" r="4.6" fill="#ffffff"/>' +
+      '<circle cx="8" cy="9" r="2.9" fill="#e2543c"/>' +
+      '<rect x="6.9" y="3.2" width="2.2" height="3.4" fill="#e2543c"/>' +
+      '<rect x="7.1" y="3.4" width="1.8" height="5" fill="#ffffff"/>',
+  },
+  {
+    // Start-panel user tile: Luna frames the picture in a soft blue plate.
+    file: "xp-user.svg",
+    size: 32,
+    body:
+      '<rect x="0" y="0" width="32" height="32" rx="3" fill="#6f9fdd"/>' +
+      '<rect x="2" y="2" width="28" height="28" rx="2" fill="#a8c8ee"/>' +
+      '<circle cx="16" cy="12" r="6" fill="#ffffff"/>' +
+      '<path fill="#ffffff" d="M16 19c6 0 10 4 10 9v3H6v-3c0-5 4-9 10-9z"/>',
+  },
+  {
+    file: "xp-cap-min.svg",
+    body: '<rect x="3" y="10" width="10" height="2.5" fill="#ffffff"/>',
+  },
+  {
+    // Outline box with the doubled caption bar Luna draws across its top.
+    file: "xp-cap-max.svg",
+    body:
+      '<rect x="3" y="3" width="10" height="3" fill="#ffffff"/>' +
+      '<rect x="3" y="6" width="1.5" height="7" fill="#ffffff"/>' +
+      '<rect x="11.5" y="6" width="1.5" height="7" fill="#ffffff"/>' +
+      '<rect x="3" y="11.5" width="10" height="1.5" fill="#ffffff"/>',
+  },
+  {
+    // Two stacked boxes: the back one clipped to an L by the front one.
+    file: "xp-cap-restore.svg",
+    body:
+      '<rect x="6" y="2.5" width="7.5" height="2.5" fill="#ffffff"/>' +
+      '<rect x="12" y="5" width="1.5" height="5" fill="#ffffff"/>' +
+      '<rect x="9.5" y="8.5" width="2.5" height="1.5" fill="#ffffff"/>' +
+      '<rect x="2.5" y="6" width="7.5" height="2.5" fill="#ffffff"/>' +
+      '<rect x="2.5" y="8.5" width="1.5" height="5" fill="#ffffff"/>' +
+      '<rect x="8.5" y="8.5" width="1.5" height="5" fill="#ffffff"/>' +
+      '<rect x="2.5" y="12" width="7.5" height="1.5" fill="#ffffff"/>',
+  },
+];
+
+for (const icon of VECTORS) {
+  const size = icon.size ?? 16;
+  await Bun.write(
+    join(outDir, icon.file),
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" ` +
+      `viewBox="0 0 ${size} ${size}">${icon.body}</svg>`,
+  );
+  count++;
 }
 for (const icon of NATIVE) {
   await Bun.write(join(outDir, icon.file), svgFor(icon.rows, 1));

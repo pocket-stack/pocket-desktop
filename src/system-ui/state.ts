@@ -30,6 +30,13 @@ export interface PopupItem {
   sep?: boolean;
   sub?: PopupItem[];
   act?: () => void;
+  /** Start-panel placement (the XP two-column layout reads these; the
+   *  Classic single-column panel ignores them). `right` moves the row into
+   *  the places column, `bottom` pins it under the programs column, `foot`
+   *  puts it in the blue strip along the bottom of the panel. */
+  col?: "right";
+  bottom?: boolean;
+  foot?: boolean;
 }
 
 export interface Popup {

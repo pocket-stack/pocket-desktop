@@ -3,10 +3,17 @@
 // Changing the active theme never changes the Pocket System manifest, native
 // host, AppSupervisor or child application plans.
 
-/** Baked W95FA slots (src/system-ui/gen-assets.ts -> pak.json). */
+/** Baked font slots (src/system-ui/gen-assets.ts -> pak.json). 19-21 are the
+ *  W95FA bitmap face, 22-23 the antialiased Luna face. */
 export const FONT = 19;
 export const FONT_B = 20;
 export const FONT_XL = 21;
+export const FONT_XP = 22;
+export const FONT_XP_B = 23;
+
+/** Text roles a theme maps onto its baked slots. Luna has no third size —
+ *  spec.ts caps the atlas at 24 slots — so `xl` lands on its bold face. */
+export type FontRole = "ui" | "bold" | "xl";
 
 export type ThemeId = "classic" | "xp";
 
@@ -36,6 +43,17 @@ export interface ChromeMetrics {
   taskLeft: number;
   taskStartW: number;
   taskGap: number;
+  /** Start panel. `startHeaderH > 0` selects the XP two-column panel (user
+   *  header, programs column, places column, a blue strip along the bottom);
+   *  otherwise the Classic single column beside a vertical rail. */
+  startX: number;
+  startW: number;
+  startRowH: number;
+  startSepH: number;
+  startHeaderH: number;
+  startFooterH: number;
+  startRailW: number;
+  startLeftW: number;
   resizeBand: number;
   resizeCorner: number;
 }
@@ -44,6 +62,7 @@ export interface DesktopTheme {
   id: ThemeId;
   label: string;
   metrics: ChromeMetrics;
+  fontSlot: (role: FontRole) => number;
   desktop: string;
   desktopLayers: ChromeLayers;
   /** Maximized windows drop Luna's rounded top corners: the caption runs
@@ -94,8 +113,24 @@ export interface DesktopTheme {
   popupItem: (hover: boolean) => string;
   popupText: (state: "normal" | "hover" | "disabled") => string;
   startMenu: string;
+  startMenuLayers: ChromeLayers;
   startRail: string;
   startItem: (hover: boolean) => string;
+  /** XP two-column panel (unused while `metrics.startHeaderH` is 0). */
+  startHeader: string;
+  startHeaderLayers: ChromeLayers;
+  startHeaderIcon: string;
+  startHeaderName: string;
+  startColumn: (side: "left" | "right") => string;
+  /** 1px rule between the two columns (absolute, inside the right one). */
+  startColumnDivider: string;
+  startSeparator: string;
+  startFooter: string;
+  startFooterLayers: ChromeLayers;
+  startFooterItem: (hover: boolean) => string;
+  startFooterText: string;
+  /** Start-button mark; "" leaves the button its label alone (Luna). */
+  startLogo: string;
   desktopSelection: string;
   desktopLabel: string;
   notepadWell: string;
@@ -117,6 +152,8 @@ export interface DesktopTheme {
 export const CLASSIC_THEME: DesktopTheme = {
   id: "classic",
   label: "Classic 98",
+  fontSlot: (role) =>
+    role === "xl" ? FONT_XL : role === "bold" ? FONT_B : FONT,
   metrics: {
     frame: 3,
     captionTop: 3,
@@ -132,6 +169,14 @@ export const CLASSIC_THEME: DesktopTheme = {
     taskLeft: 2,
     taskStartW: 54,
     taskGap: 3,
+    startX: 2,
+    startW: 182,
+    startRowH: 26,
+    startSepH: 8,
+    startHeaderH: 0,
+    startFooterH: 0,
+    startRailW: 24,
+    startLeftW: 0,
     resizeBand: 4,
     resizeCorner: 14,
   },
@@ -205,11 +250,24 @@ export const CLASSIC_THEME: DesktopTheme = {
         : "text-[#000000]",
   startMenu:
     "absolute flex-row bg-[#c0c0c0] p-[1] bevel-[#dfdfdf,#000000,#ffffff,#808080]",
+  startMenuLayers: NO_LAYERS,
   startRail: "w-[24] h-full bg-gradient-to-t from-[#000080] to-[#1084d0]",
   startItem: (hover) =>
     hover
       ? "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#000080]"
       : "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6]",
+  startHeader: "",
+  startHeaderLayers: NO_LAYERS,
+  startHeaderIcon: "",
+  startHeaderName: "",
+  startColumn: () => "",
+  startColumnDivider: "",
+  startSeparator: "",
+  startFooter: "",
+  startFooterLayers: NO_LAYERS,
+  startFooterItem: () => "",
+  startFooterText: "",
+  startLogo: "icons/start-logo.svg",
   desktopSelection: "bg-[#000080] px-[2]",
   desktopLabel: "text-[#ffffff]",
   notepadWell:
@@ -256,6 +314,7 @@ export const CLASSIC_THEME: DesktopTheme = {
 export const XP_THEME: DesktopTheme = {
   id: "xp",
   label: "Windows XP",
+  fontSlot: (role) => (role === "ui" ? FONT_XP : FONT_XP_B),
   metrics: {
     // frame = 1px outer border + 2px blue band + 1px light client ring.
     frame: 4,
@@ -272,6 +331,14 @@ export const XP_THEME: DesktopTheme = {
     taskLeft: 0,
     taskStartW: 84,
     taskGap: 3,
+    startX: 0,
+    startW: 304,
+    startRowH: 28,
+    startSepH: 9,
+    startHeaderH: 48,
+    startFooterH: 36,
+    startRailW: 0,
+    startLeftW: 172,
     resizeBand: 4,
     resizeCorner: 16,
   },
@@ -414,14 +481,43 @@ export const XP_THEME: DesktopTheme = {
       : state === "hover"
         ? "text-[#ffffff]"
         : "text-[#000000]",
+  // The panel is a window in miniature: rounded top corners over a square
+  // patch, a gel header, and a gel strip along the bottom.
   startMenu:
-    "absolute flex-row bg-[#ffffff] p-[2] border-[#aca899] shadow-md",
-  startRail:
-    "w-[28] h-full bg-gradient-to-r from-[#57b055] via-[#3f9a3e] to-[#2a6f2e]",
+    "absolute flex-col rounded-[8] border-[#1c4d9c] bg-[#ffffff] p-[1] shadow-md",
+  startMenuLayers: [
+    "absolute left-0 right-0 top-[10] bottom-0 bg-[#ffffff] border-[#1c4d9c]",
+  ],
+  startRail: "",
   startItem: (hover) =>
     hover
-      ? "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#316ac5]"
-      : "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6]",
+      ? "h-[28] flex-row items-center gap-[7] pl-[8] pr-[8] bg-[#2f71cd]"
+      : "h-[28] flex-row items-center gap-[7] pl-[8] pr-[8]",
+  startHeader: "h-[48] flex-row items-center gap-[8] pl-[7] pr-[8]",
+  startHeaderLayers: [
+    "absolute left-0 right-0 top-0 h-[12] rounded-[7] bg-gradient-to-b from-[#74acf8] via-[#0d60ca] to-[#0b5eca]",
+    "absolute left-0 right-0 top-[6] bottom-[1] bg-gradient-to-b from-[#0d60ca] via-[#2274d9] to-[#3e8eeb]",
+    "absolute left-0 right-0 bottom-0 h-[1] bg-[#1e5fb0]",
+  ],
+  startHeaderIcon: "w-[32] h-[32] rounded-[3]",
+  startHeaderName: "text-[#ffffff]",
+  startColumn: (side) =>
+    side === "left"
+      ? "w-[172] flex-col bg-[#ffffff]"
+      : "flex-1 flex-col bg-[#d2e5fa]",
+  startColumnDivider: "absolute left-0 top-0 bottom-0 w-[1] bg-[#b5d0ef]",
+  startSeparator: "h-[9] flex-col justify-center px-[10]",
+  startFooter: "h-[36] flex-row justify-end items-center",
+  startFooterLayers: [
+    "absolute left-0 right-0 top-0 bottom-0 bg-gradient-to-b from-[#4189e5] via-[#2474e1] to-[#0f5cb9]",
+    "absolute left-0 right-0 top-0 h-[1] bg-[#2a68ad]",
+  ],
+  startFooterItem: (hover) =>
+    hover
+      ? "w-[152] h-[36] flex-row items-center justify-center gap-[7] bg-[#ffffff2e]"
+      : "w-[152] h-[36] flex-row items-center justify-center gap-[7]",
+  startFooterText: "text-[#ffffff]",
+  startLogo: "",
   desktopSelection: "bg-[#316ac5] px-[3]",
   desktopLabel: "text-[#ffffff]",
   notepadWell: "flex-1 flex-col bg-[#ffffff] overflow-hidden",
