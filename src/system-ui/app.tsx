@@ -190,7 +190,15 @@ function DesktopWindow(props: {
           class={props.theme.captionIcon}
           src={props.theme.iconSource(w.icon)}
         />
-        <View class="flex-1 flex-row overflow-hidden">
+        <View class="relative flex-1 flex-row overflow-hidden">
+          {props.theme.captionTitleShadow(props.active) ? (
+            <UiText
+              bold
+              cls={props.theme.captionTitleShadow(props.active) ?? undefined}
+              t={w.title}
+              theme={props.theme}
+            />
+          ) : null}
           <UiText
             bold
             cls={props.theme.captionTitle(props.active)}
@@ -199,6 +207,9 @@ function DesktopWindow(props: {
           />
         </View>
         <CaptionButtons win={w} active={props.active} theme={props.theme} />
+        {props.theme.captionAccents(props.active).map((cls) => (
+          <View class={cls} />
+        ))}
       </View>
       {w.menus !== null ? (
         <View class={props.theme.menuBar}>
@@ -212,6 +223,9 @@ function DesktopWindow(props: {
                 theme={props.theme}
               />
             </View>
+          ))}
+          {props.theme.menuBarAccents.map((cls) => (
+            <View class={cls} />
           ))}
         </View>
       ) : null}
@@ -243,6 +257,9 @@ function DesktopWindow(props: {
           <ShutdownView data={shutdownOf(w)} theme={props.theme} />
         )}
       </View>
+      {props.theme.windowFrameAccents(props.active).map((cls) => (
+        <View class={cls} />
+      ))}
     </View>
   );
 }

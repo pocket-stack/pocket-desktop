@@ -66,6 +66,9 @@ export function CaptionButtons(props: {
             props.active,
           )}
         >
+          {props.theme.captionButtonAccents(btn, props.active).map((cls) => (
+            <View class={cls} />
+          ))}
           <Image
             class={props.theme.captionGlyphClass(
               w.pressedBtn.value === btn,
@@ -99,16 +102,29 @@ export function Taskbar(props: {
       <View
         class={props.theme.startButton(props.startOpen)}
       >
+        {props.theme.startButtonAccents(props.startOpen).map((cls) => (
+          <View class={cls} />
+        ))}
         <Image
           class="w-[18] h-[18]"
           src={props.theme.iconSource("icons/start-logo.svg")}
         />
-        <UiText
-          bold
-          cls={props.theme.startText}
-          t={props.theme.id === "xp" ? "start" : "Start"}
-          theme={props.theme}
-        />
+        <View class="relative flex-row">
+          {props.theme.startTextShadow ? (
+            <UiText
+              bold
+              cls={props.theme.startTextShadow}
+              t={props.theme.id === "xp" ? "start" : "Start"}
+              theme={props.theme}
+            />
+          ) : null}
+          <UiText
+            bold
+            cls={props.theme.startText}
+            t={props.theme.id === "xp" ? "start" : "Start"}
+            theme={props.theme}
+          />
+        </View>
       </View>
       <View class={props.theme.taskDivider} />
       <View class={props.theme.taskList}>
@@ -135,6 +151,9 @@ export function Taskbar(props: {
       <View class={props.theme.tray}>
         <UiText cls={props.theme.trayText} t={props.clock} theme={props.theme} />
       </View>
+      {props.theme.taskbarAccents.map((cls) => (
+        <View class={cls} />
+      ))}
     </View>
   );
 }
@@ -360,15 +379,25 @@ export function StartMenu(props: {
           <View class={props.theme.startAvatar}>
             <Image
               class="w-[28] h-[28]"
-              src={props.theme.iconSource("icons/computer.svg")}
+              src={props.theme.iconSource("icons/pocket-app.svg")}
             />
           </View>
-          <UiText
-            bold
-            cls={props.theme.startHeaderText}
-            t="Pocket Desktop"
-            theme={props.theme}
-          />
+          <View class="relative flex-row">
+            {props.theme.startHeaderTextShadow ? (
+              <UiText
+                bold
+                cls={props.theme.startHeaderTextShadow}
+                t="Pocket Desktop"
+                theme={props.theme}
+              />
+            ) : null}
+            <UiText
+              bold
+              cls={props.theme.startHeaderText}
+              t="Pocket Desktop"
+              theme={props.theme}
+            />
+          </View>
         </View>
         <View
           class={props.theme.startPrimaryPane}
@@ -389,6 +418,32 @@ export function StartMenu(props: {
           }}
         />
         <View class={props.theme.startFooter} />
+        <View
+          class={props.theme.startHeaderSeparator}
+          style={{
+            insetL: 0,
+            insetT: 0,
+            translateY: m.startHeaderH - 1,
+          }}
+        />
+        <View
+          class={props.theme.startPaneDivider}
+          style={{
+            insetL: 0,
+            insetT: 0,
+            translateX: 184,
+            translateY: m.startHeaderH + 1,
+            height: Math.max(0, bodyH - 2),
+          }}
+        />
+        <View
+          class={props.theme.startFooterSeparator}
+          style={{
+            insetL: 0,
+            insetT: 0,
+            translateY: props.h - m.startFooterH,
+          }}
+        />
         {props.items.map((item, i) => {
           const rect = startItemRect(props.items, i, props.theme);
           if (item.sep)
@@ -446,6 +501,9 @@ export function StartMenu(props: {
             </View>
           );
         })}
+        {props.theme.startMenuAccents.map((cls) => (
+          <View class={cls} />
+        ))}
       </View>
     );
   }
