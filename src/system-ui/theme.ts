@@ -7,8 +7,11 @@
 export const FONT = 19;
 export const FONT_B = 20;
 export const FONT_XL = 21;
+export const XP_FONT = 22;
+export const XP_FONT_B = 23;
 
 export type ThemeId = "classic" | "xp";
+export type StartMenuZone = "primary" | "secondary" | "footer";
 
 export interface ChromeMetrics {
   frame: number;
@@ -24,6 +27,13 @@ export interface ChromeMetrics {
   taskLeft: number;
   taskStartW: number;
   taskGap: number;
+  startMenuW: number;
+  startRowH: number;
+  startSepH: number;
+  startHeaderH: number;
+  startFooterH: number;
+  folderToolbarH: number;
+  folderSidebarW: number;
   resizeBand: number;
   resizeCorner: number;
 }
@@ -32,6 +42,8 @@ export interface DesktopTheme {
   id: ThemeId;
   label: string;
   metrics: ChromeMetrics;
+  fontSlot: (bold: boolean, xl: boolean) => number;
+  iconSource: (source: string) => string;
   desktop: string;
   windowFrame: (active: boolean) => string;
   windowBody: string;
@@ -68,7 +80,19 @@ export interface DesktopTheme {
   popupText: (state: "normal" | "hover" | "disabled") => string;
   startMenu: string;
   startRail: string;
-  startItem: (hover: boolean) => string;
+  startHeader: string;
+  startAvatar: string;
+  startHeaderText: string;
+  startPrimaryPane: string;
+  startSecondaryPane: string;
+  startFooter: string;
+  startItem: (zone: StartMenuZone, hover: boolean) => string;
+  startItemIcon: (zone: StartMenuZone) => string;
+  startItemText: (
+    zone: StartMenuZone,
+    state: "normal" | "hover" | "disabled",
+  ) => string;
+  startSeparator: (zone: StartMenuZone) => string;
   desktopSelection: string;
   desktopLabel: string;
   notepadWell: string;
@@ -77,8 +101,22 @@ export interface DesktopTheme {
   mutedText: string;
   pocketLoading: string;
   minesRoot: string;
+  folderExplorerChrome: boolean;
+  folderToolbar: string;
+  folderToolbarButton: string;
+  folderToolbarLabel: string;
+  folderAddressBar: string;
+  folderAddressLabel: string;
+  folderAddressWell: string;
+  folderAddressText: string;
+  folderBody: string;
+  folderSidebar: string;
+  folderSidebarCard: string;
+  folderSidebarHeading: string;
+  folderSidebarItem: string;
+  folderList: string;
   folderWell: string;
-  folderHeader: (segment: "name" | "size" | "type") => string;
+  folderHeader: (segment: "name" | "modified" | "size" | "type") => string;
   folderRow: (selected: boolean) => string;
   statusWell: string;
   dialogButton: (pressed: boolean) => string;
@@ -104,9 +142,18 @@ export const CLASSIC_THEME: DesktopTheme = {
     taskLeft: 2,
     taskStartW: 54,
     taskGap: 3,
+    startMenuW: 182,
+    startRowH: 26,
+    startSepH: 8,
+    startHeaderH: 0,
+    startFooterH: 0,
+    folderToolbarH: 0,
+    folderSidebarW: 0,
     resizeBand: 4,
     resizeCorner: 14,
   },
+  fontSlot: (bold, xl) => (xl ? FONT_XL : bold ? FONT_B : FONT),
+  iconSource: (source) => source,
   desktop: "absolute inset-0 bg-[#008080] overflow-hidden",
   windowFrame: () =>
     "absolute flex-col bg-[#c0c0c0] p-[3] bevel-[#dfdfdf,#000000,#ffffff,#808080]",
@@ -170,10 +217,24 @@ export const CLASSIC_THEME: DesktopTheme = {
   startMenu:
     "absolute flex-row bg-[#c0c0c0] p-[1] bevel-[#dfdfdf,#000000,#ffffff,#808080]",
   startRail: "w-[24] h-full bg-gradient-to-t from-[#000080] to-[#1084d0]",
-  startItem: (hover) =>
+  startHeader: "",
+  startAvatar: "",
+  startHeaderText: "text-[#ffffff]",
+  startPrimaryPane: "",
+  startSecondaryPane: "",
+  startFooter: "",
+  startItem: (_zone, hover) =>
     hover
       ? "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#000080]"
       : "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6]",
+  startItemIcon: () => "w-[16] h-[16]",
+  startItemText: (_zone, state) =>
+    state === "disabled"
+      ? "text-[#808080]"
+      : state === "hover"
+        ? "text-[#ffffff]"
+        : "text-[#000000]",
+  startSeparator: () => "h-[8] flex-col justify-center px-[2]",
   desktopSelection: "bg-[#000080] px-[2]",
   desktopLabel: "text-[#ffffff]",
   notepadWell:
@@ -184,6 +245,20 @@ export const CLASSIC_THEME: DesktopTheme = {
   pocketLoading:
     "absolute inset-0 flex-col items-center justify-center bg-[#c0c0c0] px-[20]",
   minesRoot: "flex-1 flex-col p-[5] bg-[#c0c0c0]",
+  folderExplorerChrome: false,
+  folderToolbar: "",
+  folderToolbarButton: "",
+  folderToolbarLabel: "text-[#000000]",
+  folderAddressBar: "",
+  folderAddressLabel: "text-[#000000]",
+  folderAddressWell: "",
+  folderAddressText: "text-[#000000]",
+  folderBody: "flex-1 flex-row overflow-hidden",
+  folderSidebar: "",
+  folderSidebarCard: "",
+  folderSidebarHeading: "",
+  folderSidebarItem: "",
+  folderList: "flex-1 flex-col overflow-hidden",
   folderWell:
     "flex-1 flex-col bg-[#ffffff] bevel-[#808080,#ffffff,#000000,#dfdfdf] p-[1] overflow-hidden",
   folderHeader: (segment) => {
@@ -203,6 +278,33 @@ export const CLASSIC_THEME: DesktopTheme = {
     pressed
       ? "w-[75] h-[23] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
       : "w-[75] h-[23] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]",
+};
+
+// System artwork changes with the visual system while Pocket application
+// artwork keeps its package identity. Paths not listed here intentionally
+// pass through unchanged (Pocket app icons, Minesweeper board art, and other
+// application-owned images).
+const XP_ICON_SOURCES: Readonly<Record<string, string>> = {
+  "icons/start-logo.svg": "icons/xp-start-logo.svg",
+  "icons/computer.svg": "icons/xp-computer.svg",
+  "icons/computer-16.svg": "icons/xp-computer-16.svg",
+  "icons/documents.svg": "icons/xp-documents.svg",
+  "icons/folder-16.svg": "icons/xp-folder-16.svg",
+  "icons/drive-16.svg": "icons/xp-drive-16.svg",
+  "icons/cdrom-16.svg": "icons/xp-cdrom-16.svg",
+  "icons/file-16.svg": "icons/xp-file-16.svg",
+  "icons/recycle.svg": "icons/xp-recycle.svg",
+  "icons/recycle-16.svg": "icons/xp-recycle-16.svg",
+  "icons/notepad.svg": "icons/xp-notepad.svg",
+  "icons/notepad-16.svg": "icons/xp-notepad-16.svg",
+  "icons/mines.svg": "icons/xp-mines.svg",
+  "icons/mines-16.svg": "icons/xp-mines-16.svg",
+  "icons/settings-16.svg": "icons/xp-settings-16.svg",
+  "icons/find-16.svg": "icons/xp-find-16.svg",
+  "icons/help-16.svg": "icons/xp-help-16.svg",
+  "icons/run-16.svg": "icons/xp-run-16.svg",
+  "icons/shutdown.svg": "icons/xp-shutdown.svg",
+  "icons/shutdown-16.svg": "icons/xp-shutdown-16.svg",
 };
 
 // Luna uses three color stops for its surface gradients. The
@@ -225,20 +327,29 @@ export const XP_THEME: DesktopTheme = {
     taskLeft: 0,
     taskStartW: 84,
     taskGap: 3,
+    startMenuW: 338,
+    startRowH: 32,
+    startSepH: 9,
+    startHeaderH: 52,
+    startFooterH: 42,
+    folderToolbarH: 60,
+    folderSidebarW: 168,
     resizeBand: 4,
     resizeCorner: 16,
   },
+  fontSlot: (bold) => (bold ? XP_FONT_B : XP_FONT),
+  iconSource: (source) => XP_ICON_SOURCES[source] ?? source,
   desktop:
-    "absolute inset-0 bg-gradient-to-b from-[#5db7f2] via-[#2878ce] to-[#3f8b39] overflow-hidden",
+    "absolute inset-0 bg-gradient-to-b from-[#62b7ee] via-[#2e91d2] to-[#1f78bd] overflow-hidden",
   windowFrame: (active) =>
     active
-      ? "absolute flex-col bg-[#0855dd] p-[4] rounded-lg border-[#0831d9]"
-      : "absolute flex-col bg-[#7f9ee2] p-[4] rounded-lg border-[#6f8fd6]",
+      ? "absolute flex-col bg-gradient-to-b from-[#0a6bf4] via-[#0855dd] to-[#003cc5] p-[4] rounded-lg border-[#0831d9]"
+      : "absolute flex-col bg-gradient-to-b from-[#9bb8ed] via-[#7f9ee2] to-[#6d87d0] p-[4] rounded-lg border-[#6f8fd6]",
   windowBody: "flex-1 flex-col overflow-hidden bg-[#ece9d8]",
   caption: (active) =>
     active
-      ? "flex-row items-center h-[27] pl-[4] pr-[3] rounded-md bg-gradient-to-b from-[#0997ff] via-[#0053ee] to-[#003dd7]"
-      : "flex-row items-center h-[27] pl-[4] pr-[3] rounded-md bg-gradient-to-b from-[#97b4e9] via-[#7b99e1] to-[#7a93df]",
+      ? "flex-row items-center h-[27] pl-[5] pr-[3] rounded-md bg-gradient-to-b from-[#31a8ff] via-[#0564f0] to-[#003dd7]"
+      : "flex-row items-center h-[27] pl-[5] pr-[3] rounded-md bg-gradient-to-b from-[#abc3ed] via-[#829fe1] to-[#718dd8]",
   captionTitle: (active) =>
     active ? "text-[#ffffff]" : "text-[#d8e4f8]",
   captionIcon: "w-[16] h-[16] mr-[5]",
@@ -299,13 +410,43 @@ export const XP_THEME: DesktopTheme = {
       : state === "hover"
         ? "text-[#ffffff]"
         : "text-[#000000]",
-  startMenu: "absolute flex-row bg-[#ffffff] p-[2] border-[#0054e3]",
-  startRail:
-    "w-[28] h-full bg-gradient-to-t from-[#1c6423] via-[#388e36] to-[#57b94a]",
-  startItem: (hover) =>
-    hover
-      ? "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#316ac5]"
-      : "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#ffffff]",
+  startMenu:
+    "absolute flex-col overflow-hidden bg-[#ffffff] rounded-md border-[#0831d9]",
+  startRail: "",
+  startHeader:
+    "absolute left-0 right-0 top-0 h-[52] flex-row items-center gap-[8] px-[8] bg-gradient-to-b from-[#1e8cff] via-[#0866db] to-[#0649b6]",
+  startAvatar:
+    "w-[38] h-[38] flex-col items-center justify-center rounded-sm bg-gradient-to-b from-[#ffffff] via-[#d9e8fa] to-[#9ab9df] border-[#ffffff]",
+  startHeaderText: "text-[#ffffff]",
+  startPrimaryPane: "absolute bg-[#ffffff]",
+  startSecondaryPane: "absolute bg-[#d3e5fa] border-[#9dbce7]",
+  startFooter:
+    "absolute left-0 right-0 bottom-0 h-[42] bg-gradient-to-b from-[#2d8bef] via-[#1267c8] to-[#074b9f]",
+  startItem: (zone, hover) => {
+    if (zone === "footer")
+      return hover
+        ? "absolute h-[32] flex-row items-center justify-center gap-[6] px-[7] rounded-sm bg-[#3d96ee]"
+        : "absolute h-[32] flex-row items-center justify-center gap-[6] px-[7]";
+    if (zone === "secondary")
+      return hover
+        ? "absolute h-[32] flex-row items-center gap-[7] px-[8] bg-[#316ac5]"
+        : "absolute h-[32] flex-row items-center gap-[7] px-[8] bg-[#d3e5fa]";
+    return hover
+      ? "absolute h-[32] flex-row items-center gap-[8] px-[8] bg-[#316ac5]"
+      : "absolute h-[32] flex-row items-center gap-[8] px-[8] bg-[#ffffff]";
+  },
+  startItemIcon: (zone) =>
+    zone === "primary" ? "w-[24] h-[24]" : "w-[18] h-[18]",
+  startItemText: (zone, state) => {
+    if (state === "disabled")
+      return zone === "footer" ? "text-[#b9d4f4]" : "text-[#8c8b83]";
+    if (state === "hover" || zone === "footer") return "text-[#ffffff]";
+    return zone === "secondary" ? "text-[#0a246a]" : "text-[#000000]";
+  },
+  startSeparator: (zone) =>
+    zone === "primary"
+      ? "absolute h-[9] flex-col justify-center px-[8] bg-[#ffffff]"
+      : "absolute h-[9] flex-col justify-center px-[8] bg-[#d3e5fa]",
   desktopSelection: "bg-[#316ac5] px-[3] rounded-sm",
   desktopLabel: "text-[#ffffff]",
   notepadWell:
@@ -316,21 +457,44 @@ export const XP_THEME: DesktopTheme = {
   pocketLoading:
     "absolute inset-0 flex-col items-center justify-center bg-[#ece9d8] px-[20]",
   minesRoot: "flex-1 flex-col p-[5] bg-[#ece9d8]",
+  folderExplorerChrome: true,
+  folderToolbar:
+    "h-[34] flex-row items-center gap-[3] px-[5] bg-gradient-to-b from-[#ffffff] via-[#f5f3e8] to-[#e7e4d5] border-[#d6d2bf] shrink-0",
+  folderToolbarButton:
+    "h-[28] flex-row items-center gap-[4] px-[6] rounded-sm border-[#d8d2bd] bg-gradient-to-b from-[#ffffff] via-[#f4f2e8] to-[#e4dfcf]",
+  folderToolbarLabel: "text-[#1f1f1f]",
+  folderAddressBar:
+    "h-[26] flex-row items-center gap-[6] px-[5] bg-[#ece9d8] border-[#d6d2bf] shrink-0",
+  folderAddressLabel: "text-[#444444]",
+  folderAddressWell:
+    "flex-1 h-[20] flex-row items-center gap-[4] px-[4] bg-[#ffffff] border-[#7f9db9]",
+  folderAddressText: "text-[#222222]",
+  folderBody: "flex-1 flex-row overflow-hidden bg-[#ffffff]",
+  folderSidebar:
+    "w-[168] flex-col gap-[8] p-[8] bg-gradient-to-b from-[#7ba2e7] via-[#708bdc] to-[#6375d6] shrink-0 overflow-hidden",
+  folderSidebarCard:
+    "flex-col pb-[5] rounded-md overflow-hidden bg-[#d6e7fb] border-[#89a7d8]",
+  folderSidebarHeading:
+    "h-[24] flex-row items-center px-[8] bg-gradient-to-b from-[#ffffff] via-[#f4f7ff] to-[#c7d9f3]",
+  folderSidebarItem: "h-[19] flex-row items-center gap-[5] px-[9]",
+  folderList: "flex-1 flex-col overflow-hidden bg-[#ffffff] border-[#7f9db9]",
   folderWell:
-    "flex-1 flex-col bg-[#ffffff] border-[#7f9db9] p-[1] overflow-hidden",
+    "flex-1 flex-col bg-[#ffffff] overflow-hidden",
   folderHeader: (segment) => {
+    if (segment === "modified")
+      return "w-[126] flex-row items-center px-[6] bg-gradient-to-b from-[#ffffff] via-[#f3f1e4] to-[#e2dfcf] border-[#c7c4b6]";
     if (segment === "size")
-      return "w-[64] flex-row items-center justify-end px-[6] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d7bf]";
+      return "w-[58] flex-row items-center justify-end px-[6] bg-gradient-to-b from-[#ffffff] via-[#f3f1e4] to-[#e2dfcf] border-[#c7c4b6]";
     if (segment === "type")
-      return "w-[104] flex-row items-center px-[6] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d7bf]";
-    return "flex-1 flex-row items-center px-[6] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d7bf]";
+      return "w-[94] flex-row items-center px-[6] bg-gradient-to-b from-[#ffffff] via-[#f3f1e4] to-[#e2dfcf] border-[#c7c4b6]";
+    return "flex-1 flex-row items-center px-[6] bg-gradient-to-b from-[#ffffff] via-[#f3f1e4] to-[#e2dfcf] border-[#c7c4b6]";
   },
   folderRow: (selected) =>
     selected
-      ? "h-[17] flex-row items-center px-[2] bg-[#316ac5] shrink-0"
-      : "h-[17] flex-row items-center px-[2] shrink-0",
+      ? "h-[20] flex-row items-center px-[3] bg-[#316ac5] shrink-0"
+      : "h-[20] flex-row items-center px-[3] shrink-0",
   statusWell:
-    "flex-1 h-[18] flex-row items-center px-[6] bg-[#ece9d8] border-[#aca899]",
+    "flex-1 h-[20] flex-row items-center px-[6] bg-[#ece9d8] border-[#aca899]",
   dialogButton: (pressed) =>
     pressed
       ? "w-[75] h-[23] flex-col justify-center items-center rounded-sm border-[#003c74] bg-gradient-to-b from-[#cdcac3] via-[#e3e0d8] to-[#f1efe9]"

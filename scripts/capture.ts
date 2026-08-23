@@ -62,9 +62,17 @@ inbox.push(
   JSON.stringify({ t: "key", k: "t", cmd: true, sh: true }),
 );
 await settle(xp);
+// Open and maximize My Computer so the XP proof exercises the Explorer
+// toolbar, address well, task pane, icon set and file-list chrome together.
+for (const down of [true, false, true, false])
+  inbox.push(JSON.stringify({ t: "mouse", x: 45, y: 30, d: down, sh: false }));
+await settle(xp, 3);
+for (const down of [true, false, true, false])
+  inbox.push(JSON.stringify({ t: "mouse", x: 360, y: 66, d: down, sh: false }));
+await settle(xp, 3);
 inbox.push(JSON.stringify({ t: "key", k: "escape", cmd: true }));
 await settle(xp, 2);
-inbox.push(JSON.stringify({ t: "mouse", x: 100, y: 443, d: false, sh: false }));
+inbox.push(JSON.stringify({ t: "mouse", x: 250, y: 444, d: false, sh: false }));
 await settle(xp, 2);
 const xpOutput = resolve(ROOT, "docs/xp-theme.png");
 await Bun.write(

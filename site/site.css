@@ -18,6 +18,16 @@ body { margin: 0; overflow-x: hidden; color: var(--ink); background: var(--paper
 a { color: inherit; }
 img { display: block; max-width: 100%; }
 button, input { font: inherit; }
+.coming-soon-page { min-height: 100vh; }
+.coming-soon {
+  min-height: 100vh; padding: 32px; display: flex; align-items: center;
+  justify-content: center; gap: 18px;
+}
+.coming-soon img { width: 52px; height: 52px; }
+.coming-soon h1 {
+  margin: 0; font-size: clamp(34px, 5vw, 64px); line-height: 1;
+  letter-spacing: -.055em;
+}
 .top-nav {
   position: sticky; top: 0; z-index: 50; min-height: 72px; padding: 0 5vw;
   display: flex; align-items: center; justify-content: space-between; gap: 24px;

@@ -152,6 +152,40 @@ describe("system-ui System UI companion journey", () => {
     expect(treeHasClass(tree, XP_THEME.desktop)).toBe(false);
   }, 30000);
 
+  test("XP opens the coordinated Start menu and Explorer chrome", async () => {
+    const svc = mockSvc();
+    const world = await bootWorld(APP, 60, undefined, svc.mutateOps);
+    svc.push({ t: "hello", w: 800, h: 600, epoch: 1755650000000 });
+    svc.push({ t: "key", k: "t", cmd: true, sh: true });
+    await step(world, 3);
+
+    svc.push({ t: "key", k: "escape", cmd: true });
+    await step(world, 2);
+    let tree = world.getTree();
+    expect(treeHasText(tree, "Pocket Desktop")).toBe(true);
+    expect(treeHasText(tree, "All Programs")).toBe(true);
+    expect(treeHasText(tree, "Control Panel")).toBe(true);
+    expect(treeHasText(tree, "Turn Off Computer")).toBe(true);
+
+    svc.push({ t: "key", k: "Escape" });
+    await step(world);
+    const doubleClick = async (x: number, y: number) => {
+      mouse(svc, x, y, true);
+      mouse(svc, x, y, false);
+      await step(world);
+      mouse(svc, x, y, true);
+      mouse(svc, x, y, false);
+      await step(world, 2);
+    };
+    await doubleClick(45, 30);
+    tree = world.getTree();
+    expect(treeHasText(tree, "File and Folder Tasks")).toBe(true);
+    expect(treeHasText(tree, "Other Places")).toBe(true);
+    expect(treeHasText(tree, "Address")).toBe(true);
+    expect(treeHasText(tree, "Date Modified")).toBe(true);
+    expect(treeHasText(tree, "Kind")).toBe(true);
+  }, 30000);
+
   test("typing, selection, ⌘ chords, context menu and paste-req", async () => {
     const svc = mockSvc();
     const world = await bootWorld(APP, 60, undefined, svc.mutateOps);

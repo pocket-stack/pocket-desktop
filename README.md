@@ -6,11 +6,12 @@ application presentation and theme selection; PocketJS owns package
 resolution, AppInstance isolation, scheduling and native composition.
 
 The `classic` theme is inspired by late-1990s desktop interfaces. The `xp`
-theme uses a Luna palette, three-stop plastic gradients, caption
-controls, menus and application surfaces drawn with PocketJS. **Both
-themes use the same System manifest, AppInstances and native compositor.**
-Choose one from **Start → Settings**, or press **Cmd+Shift+T** to toggle while
-testing.
+theme uses a Luna palette with PocketJS-native drawing and supplies its
+own smooth UI font atlases, semantic system icons, two-column Start menu,
+caption controls and Explorer task pane. **Both themes use the same System
+manifest, AppInstances and native compositor.** Choose one from **Start →
+Settings** in Classic or **Start → Control Panel** in XP; press
+**Cmd+Shift+T** to toggle while testing.
 
 | Classic 98 | Windows XP |
 |---|---|
@@ -89,6 +90,10 @@ with:
 bun run build:site
 bun run test:site
 ```
+
+**The root product page intentionally contains only the Pocket Desktop mark
+and “Coming Soon”.** Documentation remains available under `/docs/`, and the
+complete WebAssembly System remains available under `/play/`.
 
 The production site is deployed as Cloudflare Workers Static Assets at
 `desktop.pocketlab.build`. The checked-in Wrangler configuration owns its

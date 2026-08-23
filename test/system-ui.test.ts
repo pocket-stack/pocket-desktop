@@ -364,6 +364,21 @@ describe("dynamic theme geometry", () => {
     });
     expect(desktopIconRows(600, xp)).toBe(9);
   });
+
+  test("XP switches the UI font and semantic system icon set together", () => {
+    expect(CLASSIC_THEME.fontSlot(false, false)).toBe(19);
+    expect(XP_THEME.fontSlot(false, false)).toBe(22);
+    expect(XP_THEME.fontSlot(true, false)).toBe(23);
+    expect(CLASSIC_THEME.iconSource("icons/computer.svg")).toBe(
+      "icons/computer.svg",
+    );
+    expect(XP_THEME.iconSource("icons/computer.svg")).toBe(
+      "icons/xp-computer.svg",
+    );
+    expect(XP_THEME.iconSource("icons/pocket-app.svg")).toBe(
+      "icons/pocket-app.svg",
+    );
+  });
 });
 
 describe("hitRegion", () => {
