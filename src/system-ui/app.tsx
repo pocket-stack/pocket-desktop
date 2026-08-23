@@ -170,7 +170,7 @@ function DesktopWindow(props: {
   const w = props.win;
   return (
     <View
-      class={props.theme.windowFrame(props.active)}
+      class={props.theme.windowFrame(props.active, w.maximized.value)}
       style={{
         insetL: 0,
         insetT: 0,
@@ -182,7 +182,13 @@ function DesktopWindow(props: {
         opacity: w.minimized.value ? 0 : 1,
       }}
     >
+      {props.theme.windowLayers(props.active).map((cls) => (
+        <View class={cls} />
+      ))}
       <View class={props.theme.caption(props.active)}>
+        {props.theme.captionLayers(props.active, w.maximized.value).map((cls) => (
+          <View class={cls} />
+        ))}
         <Image class={props.theme.captionIcon} src={w.icon} />
         <View class="flex-1 flex-row overflow-hidden">
           <UiText
@@ -193,47 +199,49 @@ function DesktopWindow(props: {
         </View>
         <CaptionButtons win={w} active={props.active} theme={props.theme} />
       </View>
-      {w.menus !== null ? (
-        <View class={props.theme.menuBar}>
-          {(w.menus ?? []).map((menu, i) => (
-            <View
-              class={props.theme.menuItem(w.openMenu.value === i)}
-            >
-              <UiText
-                cls={props.theme.menuText(w.openMenu.value === i)}
-                t={menu.label}
-              />
-            </View>
-          ))}
+      <View class={props.theme.windowInner}>
+        {w.menus !== null ? (
+          <View class={props.theme.menuBar}>
+            {(w.menus ?? []).map((menu, i) => (
+              <View
+                class={props.theme.menuItem(w.openMenu.value === i)}
+              >
+                <UiText
+                  cls={props.theme.menuText(w.openMenu.value === i)}
+                  t={menu.label}
+                />
+              </View>
+            ))}
+          </View>
+        ) : null}
+        <View class={props.theme.windowBody}>
+          {w.kind === "notepad" ? (
+            <NotepadView
+              data={padOf(w)}
+              wrapW={padWrapW(w, props.theme.metrics.frame)}
+              active={props.active}
+              theme={props.theme}
+            />
+          ) : w.kind === "mines" ? (
+            <MinesView data={minesOf(w)} theme={props.theme} />
+          ) : w.kind === "folder" ? (
+            <FolderView
+              data={folderOf(w)}
+              resizable={w.resizable}
+              theme={props.theme}
+            />
+          ) : w.kind === "pocket" ? (
+            <PocketAppView
+              data={pocketOf(w)}
+              active={props.active}
+              theme={props.theme}
+            />
+          ) : w.kind === "about" ? (
+            <AboutView data={aboutOf(w)} theme={props.theme} />
+          ) : (
+            <ShutdownView data={shutdownOf(w)} theme={props.theme} />
+          )}
         </View>
-      ) : null}
-      <View class={props.theme.windowBody}>
-        {w.kind === "notepad" ? (
-          <NotepadView
-            data={padOf(w)}
-            wrapW={padWrapW(w, props.theme.metrics.frame)}
-            active={props.active}
-            theme={props.theme}
-          />
-        ) : w.kind === "mines" ? (
-          <MinesView data={minesOf(w)} theme={props.theme} />
-        ) : w.kind === "folder" ? (
-          <FolderView
-            data={folderOf(w)}
-            resizable={w.resizable}
-            theme={props.theme}
-          />
-        ) : w.kind === "pocket" ? (
-          <PocketAppView
-            data={pocketOf(w)}
-            active={props.active}
-            theme={props.theme}
-          />
-        ) : w.kind === "about" ? (
-          <AboutView data={aboutOf(w)} theme={props.theme} />
-        ) : (
-          <ShutdownView data={shutdownOf(w)} theme={props.theme} />
-        )}
       </View>
     </View>
   );
@@ -1132,7 +1140,7 @@ export default function App() {
             popup: buildPopup(
               g.x + metrics().frame + mxs,
               g.y +
-                metrics().frame +
+                metrics().captionTop +
                 metrics().titleH +
                 metrics().titleGap +
                 metrics().menuH,
@@ -1369,7 +1377,7 @@ export default function App() {
               popup: buildPopup(
                 g.x + metrics().frame + mxs,
                 g.y +
-                  metrics().frame +
+                  metrics().captionTop +
                   metrics().titleH +
                   metrics().titleGap +
                   metrics().menuH,
@@ -1937,6 +1945,9 @@ export default function App() {
 
   return (
     <View class={theme().desktop}>
+      {theme().desktopLayers.map((cls) => (
+        <View class={cls} />
+      ))}
       <DesktopIcons
         icons={icons}
         selected={iconSel.value}
