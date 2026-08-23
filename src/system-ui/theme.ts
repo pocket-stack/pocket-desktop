@@ -10,8 +10,20 @@ export const FONT_XL = 21;
 
 export type ThemeId = "classic" | "xp";
 
+/** Paint-only strips a surface stacks beneath its content: absolutely
+ *  positioned children the chrome renders BEFORE the content, so they paint
+ *  under it. Classic chrome is flat fills plus bevel rings and needs none;
+ *  Luna's gel surfaces are a base gradient plus a rounded top cap, a 1px
+ *  highlight band and 1px edge lines, which is what these carry. */
+export type ChromeLayers = readonly string[];
+
+const NO_LAYERS: ChromeLayers = [];
+
 export interface ChromeMetrics {
   frame: number;
+  /** Top of the caption inside the window box. Classic insets the caption by
+   *  the whole frame; Luna runs it edge to edge under the 1px outer border. */
+  captionTop: number;
   titleH: number;
   titleGap: number;
   buttonW: number;
@@ -33,9 +45,16 @@ export interface DesktopTheme {
   label: string;
   metrics: ChromeMetrics;
   desktop: string;
-  windowFrame: (active: boolean) => string;
+  desktopLayers: ChromeLayers;
+  /** Maximized windows drop Luna's rounded top corners: the caption runs
+   *  into the screen corner with nothing behind it to show through. */
+  windowFrame: (active: boolean, maximized: boolean) => string;
+  windowLayers: (active: boolean) => ChromeLayers;
+  /** Wrapper between the chrome and the client area (Luna's 1px light ring). */
+  windowInner: string;
   windowBody: string;
   caption: (active: boolean) => string;
+  captionLayers: (active: boolean, maximized: boolean) => ChromeLayers;
   captionTitle: (active: boolean) => string;
   captionIcon: string;
   captionControls: string;
@@ -44,6 +63,11 @@ export interface DesktopTheme {
     pressed: boolean,
     active: boolean,
   ) => string;
+  captionButtonLayers: (
+    button: "min" | "max" | "close",
+    pressed: boolean,
+    active: boolean,
+  ) => ChromeLayers;
   captionGlyphClass: (pressed: boolean) => string;
   captionGlyphSource: (
     button: "min" | "max" | "close",
@@ -53,13 +77,16 @@ export interface DesktopTheme {
   menuItem: (open: boolean) => string;
   menuText: (open: boolean) => string;
   taskbar: string;
+  taskbarLayers: ChromeLayers;
   startButton: (open: boolean) => string;
+  startLayers: (open: boolean) => ChromeLayers;
   startText: string;
   taskDivider: string;
   taskList: string;
   taskButton: (active: boolean) => string;
   taskText: (active: boolean) => string;
   tray: string;
+  trayLayers: ChromeLayers;
   trayText: string;
   popup: string;
   popupSeparatorDark: string;
@@ -92,6 +119,7 @@ export const CLASSIC_THEME: DesktopTheme = {
   label: "Classic 98",
   metrics: {
     frame: 3,
+    captionTop: 3,
     titleH: 18,
     titleGap: 1,
     buttonW: 16,
@@ -108,13 +136,17 @@ export const CLASSIC_THEME: DesktopTheme = {
     resizeCorner: 14,
   },
   desktop: "absolute inset-0 bg-[#008080] overflow-hidden",
+  desktopLayers: NO_LAYERS,
   windowFrame: () =>
     "absolute flex-col bg-[#c0c0c0] p-[3] bevel-[#dfdfdf,#000000,#ffffff,#808080]",
+  windowLayers: () => NO_LAYERS,
+  windowInner: "flex-1 flex-col",
   windowBody: "flex-1 flex-col overflow-hidden bg-[#c0c0c0]",
   caption: (active) =>
     active
       ? "flex-row items-center h-[18] pl-[3] pr-[2] bg-gradient-to-r from-[#000080] to-[#1084d0] mb-[1]"
       : "flex-row items-center h-[18] pl-[3] pr-[2] bg-gradient-to-r from-[#808080] to-[#b5b5b5] mb-[1]",
+  captionLayers: () => NO_LAYERS,
   captionTitle: (active) =>
     active ? "text-[#ffffff]" : "text-[#c0c0c0]",
   captionIcon: "w-[16] h-[16] mr-[3]",
@@ -123,6 +155,7 @@ export const CLASSIC_THEME: DesktopTheme = {
     pressed
       ? "w-[16] h-[14] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
       : "w-[16] h-[14] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]",
+  captionButtonLayers: () => NO_LAYERS,
   captionGlyphClass: (pressed) =>
     pressed ? "w-[8] h-[8] ml-[1] mt-[1]" : "w-[8] h-[8]",
   captionGlyphSource: (button, maximized) => {
@@ -139,10 +172,12 @@ export const CLASSIC_THEME: DesktopTheme = {
   menuText: (open) => (open ? "text-[#ffffff]" : "text-[#000000]"),
   taskbar:
     "absolute left-0 right-0 bottom-0 h-[28] flex-row items-center bg-[#c0c0c0] bevel-[#ffffff,#808080] pl-[2] pr-[2] gap-[3]",
+  taskbarLayers: NO_LAYERS,
   startButton: (open) =>
     open
       ? "h-[22] w-[54] flex-row justify-center items-center gap-[3] bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
       : "h-[22] w-[54] flex-row justify-center items-center gap-[3] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]",
+  startLayers: () => NO_LAYERS,
   startText: "text-[#000000]",
   taskDivider: "w-[1] h-[22] bevel-[#808080,#ffffff]",
   taskList: "flex-1 flex-row items-center gap-[3] overflow-hidden",
@@ -152,6 +187,7 @@ export const CLASSIC_THEME: DesktopTheme = {
       : "h-[22] flex-row items-center gap-[4] px-[4] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]",
   taskText: () => "text-[#000000]",
   tray: "h-[22] flex-row items-center px-[8] bevel-[#808080,#ffffff]",
+  trayLayers: NO_LAYERS,
   trayText: "text-[#000000]",
   popup:
     "absolute flex-col bg-[#c0c0c0] p-[1] bevel-[#dfdfdf,#000000,#ffffff,#808080]",
@@ -205,22 +241,33 @@ export const CLASSIC_THEME: DesktopTheme = {
       : "w-[75] h-[23] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]",
 };
 
-// Luna reduces Sheru's longer period gradients to three color stops. The
-// engine core lowers each stop pair to the established DrawList operations,
-// so native and WASM compositors receive the same rectangles and triangles.
+// Luna is a gel style: every raised surface is one rounded shape carrying a
+// three-stop base gradient, plus stacked 1px strips for the edges the three
+// stops cannot reach (the bright 2px crown, the dark seat line). Colors below
+// are sampled from a 96dpi Windows XP capture, so the row offsets in the
+// comments are that capture's pixel rows.
+//
+// Two shapes make a corner-selective rounding the single `radius` prop cannot:
+// a rounded cap layer paints the top corners and a square layer painted over
+// it from the cap's radius downwards restores the square bottom (Luna windows
+// round the top corners only). The Start button inverts it — the rounded body
+// overhangs the taskbar's left edge and its container clips the overhang, so
+// the button meets the screen edge square and curves on the right.
 export const XP_THEME: DesktopTheme = {
   id: "xp",
   label: "Windows XP",
   metrics: {
+    // frame = 1px outer border + 2px blue band + 1px light client ring.
     frame: 4,
-    titleH: 27,
-    titleGap: 0,
+    captionTop: 1,
+    titleH: 28,
+    titleGap: 1,
     buttonW: 21,
     buttonH: 21,
-    buttonTop: 3,
-    buttonRight: 3,
+    buttonTop: 4,
+    buttonRight: 1,
     buttonGap: 2,
-    menuH: 22,
+    menuH: 21,
     taskH: 30,
     taskLeft: 0,
     taskStartW: 84,
@@ -228,88 +275,156 @@ export const XP_THEME: DesktopTheme = {
     resizeBand: 4,
     resizeCorner: 16,
   },
+  // Sky gradient plus one grass band that fades in over it: three stops in a
+  // single node can only cross blue to green through mud.
   desktop:
-    "absolute inset-0 bg-gradient-to-b from-[#5db7f2] via-[#2878ce] to-[#3f8b39] overflow-hidden",
-  windowFrame: (active) =>
+    "absolute inset-0 bg-gradient-to-b from-[#1a5fbb] via-[#3f92dd] to-[#9ccff1] overflow-hidden",
+  desktopLayers: [
+    "absolute left-0 right-0 bottom-0 h-[240] bg-gradient-to-b from-[#7cb04c00] via-[#5d9a36] to-[#3a7020]",
+  ],
+  windowFrame: (active, maximized) => {
+    if (maximized)
+      return active
+        ? "absolute flex-col border-[#0831d9] bg-[#2758c9]"
+        : "absolute flex-col border-[#6673bd] bg-[#7b88cf]";
+    return active
+      ? "absolute flex-col rounded-[6] border-[#0831d9] bg-[#2758c9] shadow-md"
+      : "absolute flex-col rounded-[6] border-[#6673bd] bg-[#7b88cf] shadow-md";
+  },
+  // Square-bottom patch: covers the frame's rounded bottom corners from below
+  // the top radius down. Its own top border line hides under the caption.
+  windowLayers: (active) =>
     active
-      ? "absolute flex-col bg-[#0855dd] p-[4] rounded-lg border-[#0831d9]"
-      : "absolute flex-col bg-[#7f9ee2] p-[4] rounded-lg border-[#6f8fd6]",
+      ? ["absolute left-0 right-0 top-[8] bottom-0 bg-[#2758c9] border-[#0831d9]"]
+      : ["absolute left-0 right-0 top-[8] bottom-0 bg-[#7b88cf] border-[#6673bd]"],
+  windowInner: "flex-1 flex-col mx-[3] mb-[3] p-[1] bg-[#dee8fe]",
   windowBody: "flex-1 flex-col overflow-hidden bg-[#ece9d8]",
-  caption: (active) =>
+  caption: () =>
+    "flex-row items-center h-[28] mt-[1] mx-[1] pl-[3] pr-[4]",
+  captionLayers: (active, maximized) =>
     active
-      ? "flex-row items-center h-[27] pl-[4] pr-[3] rounded-md bg-gradient-to-b from-[#0997ff] via-[#0053ee] to-[#003dd7]"
-      : "flex-row items-center h-[27] pl-[4] pr-[3] rounded-md bg-gradient-to-b from-[#97b4e9] via-[#7b99e1] to-[#7a93df]",
+      ? [
+          // rows 0-9, top corners rounded; rows 5-9 hidden by the body layer
+          maximized
+            ? "absolute left-0 right-0 top-0 h-[10] bg-gradient-to-b from-[#55a0ff] via-[#0060f0] to-[#0054e3]"
+            : "absolute left-0 right-0 top-0 h-[10] rounded-[5] bg-gradient-to-b from-[#55a0ff] via-[#0060f0] to-[#0054e3]",
+          // rows 5-25: the dark plateau lifting back to the bright seat
+          "absolute left-0 right-0 top-[5] bottom-[2] bg-gradient-to-b from-[#0060f0] via-[#0056e8] to-[#0369fe]",
+          "absolute left-0 right-0 bottom-[1] h-[1] bg-[#004fe0]",
+          "absolute left-0 right-0 bottom-0 h-[1] bg-[#0d42a8]",
+        ]
+      : [
+          maximized
+            ? "absolute left-0 right-0 top-0 h-[10] bg-gradient-to-b from-[#9ab8f5] via-[#7f9de1] to-[#7a97dd]"
+            : "absolute left-0 right-0 top-0 h-[10] rounded-[5] bg-gradient-to-b from-[#9ab8f5] via-[#7f9de1] to-[#7a97dd]",
+          "absolute left-0 right-0 top-[5] bottom-[2] bg-gradient-to-b from-[#7f9de1] via-[#7c99e0] to-[#82a9ea]",
+          "absolute left-0 right-0 bottom-[1] h-[1] bg-[#7590d5]",
+          "absolute left-0 right-0 bottom-0 h-[1] bg-[#6f8ace]",
+        ],
   captionTitle: (active) =>
-    active ? "text-[#ffffff]" : "text-[#d8e4f8]",
+    active ? "text-[#ffffff]" : "text-[#dae5f8]",
   captionIcon: "w-[16] h-[16] mr-[5]",
-  captionControls: "flex-row items-center gap-[2]",
-  captionButton: (button, pressed, active) => {
+  captionControls: "h-[28] flex-row items-start pt-[4] gap-[2]",
+  // The cell is the white ring plus the dark inner rim; the face layer below
+  // paints the gel gradient inside both.
+  captionButton: (button, _pressed, active) => {
     if (!active)
-      return "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#d8e4f8] bg-gradient-to-b from-[#aebfe7] via-[#829bd9] to-[#7088c8]";
+      return "w-[21] h-[21] flex-col justify-center items-center rounded-[3] border-[#dbe6f8] bg-[#8e9fd0]";
+    if (button === "close")
+      return "w-[21] h-[21] flex-col justify-center items-center rounded-[3] border-[#ffffff] bg-[#ae6350]";
+    return "w-[21] h-[21] flex-col justify-center items-center rounded-[3] border-[#e8f1ff] bg-[#4a6ec2]";
+  },
+  captionButtonLayers: (button, pressed, active) => {
+    if (!active)
+      return [
+        "absolute inset-[2] rounded-[1] bg-gradient-to-b from-[#c2d0f0] via-[#a2b5e4] to-[#8397d2]",
+      ];
     if (button === "close")
       return pressed
-        ? "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#b02822] via-[#c93a35] to-[#f0a08e]"
-        : "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#f0a08e] via-[#e35451] to-[#b02822]";
+        ? ["absolute inset-[2] rounded-[1] bg-gradient-to-b from-[#a33513] via-[#d1552e] to-[#f2a993]"]
+        : ["absolute inset-[2] rounded-[1] bg-gradient-to-b from-[#f7a794] via-[#ec7a5b] to-[#c8401a]"];
     return pressed
-      ? "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#2152c5] via-[#3f72dd] to-[#8db5f0]"
-      : "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#8db5f0] via-[#3f72dd] to-[#2152c5]";
+      ? ["absolute inset-[2] rounded-[1] bg-gradient-to-b from-[#1b4bc0] via-[#3f72dd] to-[#8fb2fb]"]
+      : ["absolute inset-[2] rounded-[1] bg-gradient-to-b from-[#8dabfb] via-[#4d84f4] to-[#1f56db]"];
   },
-  captionGlyphClass: (pressed) =>
-    pressed ? "w-[8] h-[8] ml-[1] mt-[1]" : "w-[8] h-[8]",
+  captionGlyphClass: () => "w-[16] h-[16]",
   captionGlyphSource: (button, maximized) => {
     if (maximized) return "icons/xp-cap-restore.svg";
     if (button === "min") return "icons/xp-cap-min.svg";
     if (button === "close") return "icons/xp-cap-close.svg";
     return "icons/xp-cap-max.svg";
   },
-  menuBar:
-    "flex-row items-center h-[22] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d2bd]",
+  menuBar: "flex-row items-center h-[21] bg-[#ece9d8]",
   menuItem: (open) =>
     open
-      ? "h-[21] px-[7] flex-col justify-center bg-[#316ac5]"
-      : "h-[21] px-[7] flex-col justify-center",
+      ? "h-[21] px-[6] flex-col justify-center bg-[#316ac5]"
+      : "h-[21] px-[6] flex-col justify-center",
   menuText: (open) => (open ? "text-[#ffffff]" : "text-[#000000]"),
   taskbar:
-    "absolute left-0 right-0 bottom-0 h-[30] flex-row items-center bg-gradient-to-b from-[#1f80ff] via-[#0865dc] to-[#0340a6] pr-[3] gap-[3]",
-  startButton: (open) =>
+    "absolute left-0 right-0 bottom-0 h-[30] flex-row items-center gap-[3] bg-gradient-to-b from-[#2059d4] via-[#245cdc] to-[#2864e6]",
+  taskbarLayers: [
+    "absolute left-0 right-0 top-0 h-[1] bg-[#0e3f9e]",
+    "absolute left-0 right-0 top-[1] h-[4] bg-gradient-to-b from-[#4a92f4] via-[#4188ed] to-[#2260d8]",
+    "absolute left-0 right-0 bottom-[1] h-[1] bg-[#1e50be]",
+    "absolute left-0 right-0 bottom-0 h-[1] bg-[#1243ac]",
+  ],
+  // overflow-hidden clips the body's left overhang, so the button is square
+  // against the screen edge and rounded on the taskbar side.
+  startButton: () =>
+    "h-[30] w-[84] overflow-hidden flex-row justify-center items-center gap-[4]",
+  startLayers: (open) =>
     open
-      ? "h-[30] w-[84] flex-row justify-center items-center gap-[4] rounded-lg bg-gradient-to-b from-[#1c6423] via-[#388e36] to-[#57b94a] border-[#7ed36b]"
-      : "h-[30] w-[84] flex-row justify-center items-center gap-[4] rounded-lg bg-gradient-to-b from-[#73cf61] via-[#43a044] to-[#216b28] border-[#9be58a]",
+      ? [
+          "absolute left-[-12] right-0 top-0 bottom-0 rounded-[11] border-[#2c6b2a] bg-gradient-to-b from-[#357f33] via-[#3f9a41] to-[#4aa64c]",
+          "absolute left-[-12] right-0 top-[1] h-[22] rounded-[11] bg-gradient-to-b from-[#0000003d] via-[#00000000] to-[#00000000]",
+        ]
+      : [
+          "absolute left-[-12] right-0 top-0 bottom-0 rounded-[11] border-[#3b8038] bg-gradient-to-b from-[#3f9140] via-[#46ab49] to-[#3c8a3d]",
+          "absolute left-[-12] right-0 top-[1] h-[22] rounded-[11] bg-gradient-to-b from-[#ffffff46] via-[#ffffff00] to-[#ffffff00]",
+        ],
   startText: "text-[#ffffff]",
-  taskDivider: "w-[1] h-[24] bg-[#79a8f3]",
+  // No Quick Launch bar: the gap alone separates Start from the task list.
+  // Kept 1px wide so taskEntryAt's first-button x stays the painted one.
+  taskDivider: "w-[1] h-0",
   taskList: "flex-1 flex-row items-center gap-[3] overflow-hidden",
   taskButton: (active) =>
     active
-      ? "h-[24] flex-row items-center gap-[4] px-[6] rounded-sm bg-gradient-to-b from-[#58a5f4] via-[#2c7ada] to-[#1451a6] border-[#8fc4ff]"
-      : "h-[24] flex-row items-center gap-[4] px-[6] rounded-sm bg-gradient-to-b from-[#3d8ee8] via-[#1769c5] to-[#0d4fa5] border-[#6fa9eb]",
+      ? "h-[25] mt-[1] flex-row items-center gap-[5] px-[6] rounded-[3] border-[#0b3691] bg-gradient-to-b from-[#16489f] via-[#1b50b8] to-[#2154bc]"
+      : "h-[25] mt-[1] flex-row items-center gap-[5] px-[6] rounded-[3] border-[#2a6ad0] bg-gradient-to-b from-[#4b93f6] via-[#3b81f2] to-[#2e6fdf]",
   taskText: () => "text-[#ffffff]",
-  tray:
-    "h-[28] flex-row items-center px-[9] rounded-sm bg-gradient-to-b from-[#3ba8f6] via-[#1687dd] to-[#0b67bd] border-[#65bff7]",
+  tray: "h-[29] mt-[1] flex-row items-center pl-[10] pr-[9]",
+  trayLayers: [
+    "absolute inset-0 bg-gradient-to-b from-[#1495e5] via-[#1187e4] to-[#0f8fea]",
+    "absolute left-0 right-0 top-0 h-[3] bg-gradient-to-b from-[#28a4f8] via-[#26adf8] to-[#1596e6]",
+    "absolute left-0 top-0 bottom-0 w-[1] bg-[#00337e]",
+    "absolute left-[1] top-0 bottom-0 w-[1] bg-[#2fbdee]",
+    "absolute left-0 right-0 bottom-0 h-[1] bg-[#0062c5]",
+  ],
   trayText: "text-[#ffffff]",
-  popup: "absolute flex-col bg-[#ffffff] p-[2] border-[#316ac5]",
-  popupSeparatorDark: "h-[1] bg-[#aca899]",
+  popup: "absolute flex-col bg-[#ffffff] p-[2] border-[#aca899] shadow-md",
+  popupSeparatorDark: "h-[1] bg-[#c5c2b4]",
   popupSeparatorLight: "h-[1] bg-[#ffffff]",
   popupItem: (hover) =>
     hover
-      ? "h-[18] flex-row items-center gap-[5] pl-[4] pr-[8] bg-[#316ac5]"
-      : "h-[18] flex-row items-center gap-[5] pl-[4] pr-[8] bg-[#ffffff]",
+      ? "h-[19] flex-row items-center gap-[5] pl-[4] pr-[8] bg-[#316ac5]"
+      : "h-[19] flex-row items-center gap-[5] pl-[4] pr-[8]",
   popupText: (state) =>
     state === "disabled"
       ? "text-[#aca899]"
       : state === "hover"
         ? "text-[#ffffff]"
         : "text-[#000000]",
-  startMenu: "absolute flex-row bg-[#ffffff] p-[2] border-[#0054e3]",
+  startMenu:
+    "absolute flex-row bg-[#ffffff] p-[2] border-[#aca899] shadow-md",
   startRail:
-    "w-[28] h-full bg-gradient-to-t from-[#1c6423] via-[#388e36] to-[#57b94a]",
+    "w-[28] h-full bg-gradient-to-r from-[#57b055] via-[#3f9a3e] to-[#2a6f2e]",
   startItem: (hover) =>
     hover
       ? "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#316ac5]"
-      : "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6] bg-[#ffffff]",
-  desktopSelection: "bg-[#316ac5] px-[3] rounded-sm",
+      : "h-[26] flex-row items-center gap-[6] pl-[6] pr-[6]",
+  desktopSelection: "bg-[#316ac5] px-[3]",
   desktopLabel: "text-[#ffffff]",
-  notepadWell:
-    "flex-1 flex-col bg-[#ffffff] border-[#7f9db9] overflow-hidden",
+  notepadWell: "flex-1 flex-col bg-[#ffffff] overflow-hidden",
   selection: "bg-[#316ac5] flex-row",
   selectionText: "text-[#ffffff]",
   mutedText: "text-[#6f6e64]",
@@ -320,10 +435,10 @@ export const XP_THEME: DesktopTheme = {
     "flex-1 flex-col bg-[#ffffff] border-[#7f9db9] p-[1] overflow-hidden",
   folderHeader: (segment) => {
     if (segment === "size")
-      return "w-[64] flex-row items-center justify-end px-[6] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d7bf]";
+      return "w-[64] flex-row items-center justify-end px-[6] bg-gradient-to-b from-[#ffffff] via-[#f6f4ec] to-[#e4e1d3] border-[#d5d2c4]";
     if (segment === "type")
-      return "w-[104] flex-row items-center px-[6] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d7bf]";
-    return "flex-1 flex-row items-center px-[6] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d7bf]";
+      return "w-[104] flex-row items-center px-[6] bg-gradient-to-b from-[#ffffff] via-[#f6f4ec] to-[#e4e1d3] border-[#d5d2c4]";
+    return "flex-1 flex-row items-center px-[6] bg-gradient-to-b from-[#ffffff] via-[#f6f4ec] to-[#e4e1d3] border-[#d5d2c4]";
   },
   folderRow: (selected) =>
     selected
@@ -333,8 +448,8 @@ export const XP_THEME: DesktopTheme = {
     "flex-1 h-[18] flex-row items-center px-[6] bg-[#ece9d8] border-[#aca899]",
   dialogButton: (pressed) =>
     pressed
-      ? "w-[75] h-[23] flex-col justify-center items-center rounded-sm border-[#003c74] bg-gradient-to-b from-[#cdcac3] via-[#e3e0d8] to-[#f1efe9]"
-      : "w-[75] h-[23] flex-col justify-center items-center rounded-sm border-[#003c74] bg-gradient-to-b from-[#ffffff] via-[#f4f3ee] to-[#d8d0c4]",
+      ? "w-[75] h-[23] flex-col justify-center items-center rounded-[3] border-[#003c74] bg-gradient-to-b from-[#c8c4b8] via-[#dedad0] to-[#f0eee8]"
+      : "w-[75] h-[23] flex-col justify-center items-center rounded-[3] border-[#003c74] bg-gradient-to-b from-[#ffffff] via-[#f5f3ed] to-[#dcd6c8]",
 };
 
 export const THEMES: readonly DesktopTheme[] = [CLASSIC_THEME, XP_THEME];

@@ -106,7 +106,7 @@ export function contentTop(
   metrics: ChromeMetrics = DEFAULT_METRICS,
 ): number {
   return (
-    metrics.frame +
+    metrics.captionTop +
     metrics.titleH +
     metrics.titleGap +
     (opts.menuWidths.length > 0 ? metrics.menuH : 0)
@@ -169,9 +169,9 @@ export function hitRegion(
   }
 
   // Caption strip.
-  if (y >= metrics.frame && y < metrics.frame + metrics.titleH) {
+  if (y >= metrics.captionTop && y < metrics.captionTop + metrics.titleH) {
     const xs = captionButtonXs(geo.w, opts.buttons, metrics);
-    const btnTop = metrics.frame + metrics.buttonTop;
+    const btnTop = metrics.captionTop + metrics.buttonTop;
     if (y >= btnTop && y < btnTop + metrics.buttonH) {
       for (let i = 0; i < xs.length; i++) {
         if (x >= xs[i] && x < xs[i] + metrics.buttonW) {
@@ -184,7 +184,7 @@ export function hitRegion(
   }
 
   // Menu bar.
-  const menuTop = metrics.frame + metrics.titleH + metrics.titleGap;
+  const menuTop = metrics.captionTop + metrics.titleH + metrics.titleGap;
   if (
     opts.menuWidths.length > 0 &&
     y >= menuTop &&

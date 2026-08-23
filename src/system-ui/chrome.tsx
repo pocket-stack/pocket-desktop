@@ -57,6 +57,11 @@ export function CaptionButtons(props: {
             props.active,
           )}
         >
+          {props.theme
+            .captionButtonLayers(btn, w.pressedBtn.value === btn, props.active)
+            .map((cls) => (
+              <View class={cls} />
+            ))}
           <Image
             class={props.theme.captionGlyphClass(
               w.pressedBtn.value === btn,
@@ -87,9 +92,15 @@ export function Taskbar(props: {
       class={props.theme.taskbar}
       style={{ zIndex: 10000 }}
     >
+      {props.theme.taskbarLayers.map((cls) => (
+        <View class={cls} />
+      ))}
       <View
         class={props.theme.startButton(props.startOpen)}
       >
+        {props.theme.startLayers(props.startOpen).map((cls) => (
+          <View class={cls} />
+        ))}
         <Image class="w-[16] h-[16]" src="icons/start-logo.svg" />
         <UiText bold cls={props.theme.startText} t="Start" />
       </View>
@@ -112,6 +123,9 @@ export function Taskbar(props: {
         ))}
       </View>
       <View class={props.theme.tray}>
+        {props.theme.trayLayers.map((cls) => (
+          <View class={cls} />
+        ))}
         <UiText cls={props.theme.trayText} t={props.clock} />
       </View>
     </View>
