@@ -62,6 +62,19 @@ inbox.push(
   JSON.stringify({ t: "key", k: "t", cmd: true, sh: true }),
 );
 await settle(xp);
+// Keep a focused QA receipt for the Luna window frame, menu bar, Start shell,
+// Start button and taskbar. The documentation image below remains the fuller
+// Explorer proof.
+inbox.push(JSON.stringify({ t: "key", k: "escape", cmd: true }));
+await settle(xp, 2);
+const xpChromeOutput = resolve(ROOT, "dist/xp-chrome.png");
+await Bun.write(
+  xpChromeOutput,
+  encodePNG(xp.render(), WIDTH * SCALE, HEIGHT * SCALE),
+);
+console.log(`Pocket Desktop: captured ${xpChromeOutput}`);
+inbox.push(JSON.stringify({ t: "key", k: "Escape" }));
+await settle(xp, 2);
 // Open and maximize My Computer so the XP proof exercises the Explorer
 // toolbar, address well, task pane, icon set and file-list chrome together.
 for (const down of [true, false, true, false])

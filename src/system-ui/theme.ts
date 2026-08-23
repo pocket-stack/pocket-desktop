@@ -46,9 +46,12 @@ export interface DesktopTheme {
   iconSource: (source: string) => string;
   desktop: string;
   windowFrame: (active: boolean) => string;
+  windowFrameAccents: (active: boolean) => readonly string[];
   windowBody: string;
   caption: (active: boolean) => string;
+  captionAccents: (active: boolean) => readonly string[];
   captionTitle: (active: boolean) => string;
+  captionTitleShadow: (active: boolean) => string | null;
   captionIcon: string;
   captionControls: string;
   captionButton: (
@@ -56,17 +59,25 @@ export interface DesktopTheme {
     pressed: boolean,
     active: boolean,
   ) => string;
+  captionButtonAccents: (
+    button: "min" | "max" | "close",
+    active: boolean,
+  ) => readonly string[];
   captionGlyphClass: (pressed: boolean) => string;
   captionGlyphSource: (
     button: "min" | "max" | "close",
     maximized: boolean,
   ) => string;
   menuBar: string;
+  menuBarAccents: readonly string[];
   menuItem: (open: boolean) => string;
   menuText: (open: boolean) => string;
   taskbar: string;
+  taskbarAccents: readonly string[];
   startButton: (open: boolean) => string;
+  startButtonAccents: (open: boolean) => readonly string[];
   startText: string;
+  startTextShadow: string | null;
   taskDivider: string;
   taskList: string;
   taskButton: (active: boolean) => string;
@@ -79,10 +90,15 @@ export interface DesktopTheme {
   popupItem: (hover: boolean) => string;
   popupText: (state: "normal" | "hover" | "disabled") => string;
   startMenu: string;
+  startMenuAccents: readonly string[];
+  startHeaderSeparator: string;
+  startPaneDivider: string;
+  startFooterSeparator: string;
   startRail: string;
   startHeader: string;
   startAvatar: string;
   startHeaderText: string;
+  startHeaderTextShadow: string | null;
   startPrimaryPane: string;
   startSecondaryPane: string;
   startFooter: string;
@@ -157,19 +173,23 @@ export const CLASSIC_THEME: DesktopTheme = {
   desktop: "absolute inset-0 bg-[#008080] overflow-hidden",
   windowFrame: () =>
     "absolute flex-col bg-[#c0c0c0] p-[3] bevel-[#dfdfdf,#000000,#ffffff,#808080]",
+  windowFrameAccents: () => [],
   windowBody: "flex-1 flex-col overflow-hidden bg-[#c0c0c0]",
   caption: (active) =>
     active
       ? "flex-row items-center h-[18] pl-[3] pr-[2] bg-gradient-to-r from-[#000080] to-[#1084d0] mb-[1]"
       : "flex-row items-center h-[18] pl-[3] pr-[2] bg-gradient-to-r from-[#808080] to-[#b5b5b5] mb-[1]",
+  captionAccents: () => [],
   captionTitle: (active) =>
     active ? "text-[#ffffff]" : "text-[#c0c0c0]",
+  captionTitleShadow: () => null,
   captionIcon: "w-[16] h-[16] mr-[3]",
   captionControls: "flex-row items-center",
   captionButton: (_button, pressed) =>
     pressed
       ? "w-[16] h-[14] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
       : "w-[16] h-[14] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]",
+  captionButtonAccents: () => [],
   captionGlyphClass: (pressed) =>
     pressed ? "w-[8] h-[8] ml-[1] mt-[1]" : "w-[8] h-[8]",
   captionGlyphSource: (button, maximized) => {
@@ -179,6 +199,7 @@ export const CLASSIC_THEME: DesktopTheme = {
     return "icons/cap-max.svg";
   },
   menuBar: "flex-row items-center h-[18] bg-[#c0c0c0]",
+  menuBarAccents: [],
   menuItem: (open) =>
     open
       ? "h-[17] px-[6] flex-col justify-center bg-[#000080]"
@@ -186,11 +207,14 @@ export const CLASSIC_THEME: DesktopTheme = {
   menuText: (open) => (open ? "text-[#ffffff]" : "text-[#000000]"),
   taskbar:
     "absolute left-0 right-0 bottom-0 h-[28] flex-row items-center bg-[#c0c0c0] bevel-[#ffffff,#808080] pl-[2] pr-[2] gap-[3]",
+  taskbarAccents: [],
   startButton: (open) =>
     open
       ? "h-[22] w-[54] flex-row justify-center items-center gap-[3] bg-[#c0c0c0] bevel-[#000000,#ffffff,#808080,#dfdfdf]"
       : "h-[22] w-[54] flex-row justify-center items-center gap-[3] bg-[#c0c0c0] bevel-[#ffffff,#000000,#dfdfdf,#808080]",
+  startButtonAccents: () => [],
   startText: "text-[#000000]",
+  startTextShadow: null,
   taskDivider: "w-[1] h-[22] bevel-[#808080,#ffffff]",
   taskList: "flex-1 flex-row items-center gap-[3] overflow-hidden",
   taskButton: (active) =>
@@ -216,10 +240,15 @@ export const CLASSIC_THEME: DesktopTheme = {
         : "text-[#000000]",
   startMenu:
     "absolute flex-row bg-[#c0c0c0] p-[1] bevel-[#dfdfdf,#000000,#ffffff,#808080]",
+  startMenuAccents: [],
+  startHeaderSeparator: "",
+  startPaneDivider: "",
+  startFooterSeparator: "",
   startRail: "w-[24] h-full bg-gradient-to-t from-[#000080] to-[#1084d0]",
   startHeader: "",
   startAvatar: "",
   startHeaderText: "text-[#ffffff]",
+  startHeaderTextShadow: null,
   startPrimaryPane: "",
   startSecondaryPane: "",
   startFooter: "",
@@ -314,18 +343,18 @@ export const XP_THEME: DesktopTheme = {
   id: "xp",
   label: "Windows XP",
   metrics: {
-    frame: 4,
-    titleH: 27,
+    frame: 3,
+    titleH: 26,
     titleGap: 0,
     buttonW: 21,
     buttonH: 21,
-    buttonTop: 3,
-    buttonRight: 3,
+    buttonTop: 2,
+    buttonRight: 2,
     buttonGap: 2,
     menuH: 22,
     taskH: 30,
     taskLeft: 0,
-    taskStartW: 84,
+    taskStartW: 96,
     taskGap: 3,
     startMenuW: 338,
     startRowH: 32,
@@ -343,28 +372,71 @@ export const XP_THEME: DesktopTheme = {
     "absolute inset-0 bg-gradient-to-b from-[#62b7ee] via-[#2e91d2] to-[#1f78bd] overflow-hidden",
   windowFrame: (active) =>
     active
-      ? "absolute flex-col bg-gradient-to-b from-[#0a6bf4] via-[#0855dd] to-[#003cc5] p-[4] rounded-lg border-[#0831d9]"
-      : "absolute flex-col bg-gradient-to-b from-[#9bb8ed] via-[#7f9ee2] to-[#6d87d0] p-[4] rounded-lg border-[#6f8fd6]",
+      ? "absolute flex-col bg-gradient-to-b from-[#0997ff] via-[#0855dd] to-[#0046c8] p-[3] rounded-md border-[#0831d9]"
+      : "absolute flex-col bg-gradient-to-b from-[#a2bced] via-[#819fdf] to-[#687fc6] p-[3] rounded-md border-[#6079bd] overflow-hidden",
+  windowFrameAccents: (active) =>
+    active
+      ? [
+          "absolute left-[3] right-[3] top-[1] h-[1] bg-gradient-to-r from-[#2d8fff] via-[#8bd0ff] to-[#2d8fff]",
+          "absolute left-[1] top-[4] bottom-[3] w-[1] bg-[#409cff]",
+          "absolute right-[1] top-[4] bottom-[3] w-[1] bg-[#0035a6]",
+          "absolute left-[3] right-[3] bottom-[1] h-[1] bg-[#0035a6]",
+          "absolute left-0 bottom-0 w-[4] h-[4] bg-[#0046c8]",
+          "absolute right-0 bottom-0 w-[4] h-[4] bg-[#0046c8]",
+        ]
+      : [
+          "absolute left-[3] right-[3] top-[1] h-[1] bg-[#c1d4f5]",
+          "absolute left-[1] top-[4] bottom-[3] w-[1] bg-[#a9c0ec]",
+          "absolute right-[1] top-[4] bottom-[3] w-[1] bg-[#536cad]",
+          "absolute left-[3] right-[3] bottom-[1] h-[1] bg-[#536cad]",
+        ],
   windowBody: "flex-1 flex-col overflow-hidden bg-[#ece9d8]",
   caption: (active) =>
     active
-      ? "flex-row items-center h-[27] pl-[5] pr-[3] rounded-md bg-gradient-to-b from-[#31a8ff] via-[#0564f0] to-[#003dd7]"
-      : "flex-row items-center h-[27] pl-[5] pr-[3] rounded-md bg-gradient-to-b from-[#abc3ed] via-[#829fe1] to-[#718dd8]",
+      ? "relative flex-row items-center h-[26] pl-[4] pr-[2] bg-gradient-to-b from-[#0997ff] via-[#0050ee] to-[#003dd7] overflow-hidden"
+      : "relative flex-row items-center h-[26] pl-[4] pr-[2] bg-gradient-to-b from-[#97b4e9] via-[#7b99e1] to-[#7a93df] overflow-hidden",
+  captionAccents: (active) =>
+    active
+      ? [
+          "absolute left-0 right-0 top-0 h-[1] bg-[#67b8ff]",
+          "absolute left-0 right-0 bottom-0 h-[1] bg-[#0033ad]",
+          "absolute left-0 top-[1] bottom-[1] w-[1] bg-[#2489fb]",
+        ]
+      : [
+          "absolute left-0 right-0 top-0 h-[1] bg-[#c6d7f5]",
+          "absolute left-0 right-0 bottom-0 h-[1] bg-[#6078b6]",
+        ],
   captionTitle: (active) =>
-    active ? "text-[#ffffff]" : "text-[#d8e4f8]",
+    active ? "relative text-[#ffffff]" : "relative text-[#d8e4f8]",
+  captionTitleShadow: (active) =>
+    active ? "absolute left-[1] top-[1] text-[#002b82]" : null,
   captionIcon: "w-[16] h-[16] mr-[5]",
   captionControls: "flex-row items-center gap-[2]",
   captionButton: (button, pressed, active) => {
     if (!active)
-      return "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#d8e4f8] bg-gradient-to-b from-[#aebfe7] via-[#829bd9] to-[#7088c8]";
+      return "relative w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#536cae] bg-gradient-to-b from-[#b7c9ed] via-[#829cda] to-[#667fc2] overflow-hidden";
     if (button === "close")
       return pressed
-        ? "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#b02822] via-[#c93a35] to-[#f0a08e]"
-        : "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#f0a08e] via-[#e35451] to-[#b02822]";
+        ? "relative w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#7f180f] bg-gradient-to-b from-[#b92d20] via-[#d44a3d] to-[#ee7f69] overflow-hidden"
+        : "relative w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#8e2116] bg-gradient-to-b from-[#f49a81] via-[#df4f3f] to-[#b5261c] overflow-hidden";
     return pressed
-      ? "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#2152c5] via-[#3f72dd] to-[#8db5f0]"
-      : "w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#ffffff] bg-gradient-to-b from-[#8db5f0] via-[#3f72dd] to-[#2152c5]";
+      ? "relative w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#153caa] bg-gradient-to-b from-[#2351bd] via-[#4174db] to-[#86adea] overflow-hidden"
+      : "relative w-[21] h-[21] flex-col justify-center items-center rounded-sm border-[#123aab] bg-gradient-to-b from-[#9dc5f8] via-[#4b80e3] to-[#1d4fbd] overflow-hidden";
   },
+  captionButtonAccents: (button, active) => [
+    button === "close" && active
+      ? "absolute left-[2] right-[2] top-[1] h-[1] bg-[#ffd1c3]"
+      : "absolute left-[2] right-[2] top-[1] h-[1] bg-[#dcecff]",
+    button === "close" && active
+      ? "absolute left-[1] top-[2] bottom-[2] w-[1] bg-[#f7a18c]"
+      : "absolute left-[1] top-[2] bottom-[2] w-[1] bg-[#a8ccfa]",
+    button === "close" && active
+      ? "absolute left-[2] right-[2] bottom-[1] h-[1] bg-[#7c160f]"
+      : "absolute left-[2] right-[2] bottom-[1] h-[1] bg-[#0a318f]",
+    button === "close" && active
+      ? "absolute right-[1] top-[2] bottom-[2] w-[1] bg-[#8e2017]"
+      : "absolute right-[1] top-[2] bottom-[2] w-[1] bg-[#0b3297]",
+  ],
   captionGlyphClass: (pressed) =>
     pressed ? "w-[8] h-[8] ml-[1] mt-[1]" : "w-[8] h-[8]",
   captionGlyphSource: (button, maximized) => {
@@ -374,19 +446,36 @@ export const XP_THEME: DesktopTheme = {
     return "icons/xp-cap-max.svg";
   },
   menuBar:
-    "flex-row items-center h-[22] bg-gradient-to-b from-[#fcfcf9] via-[#f3f1e4] to-[#ece9d8] border-[#d8d2bd]",
+    "relative flex-row items-center h-[22] bg-[#ece9d8] overflow-hidden",
+  menuBarAccents: [
+    "absolute left-0 right-0 top-0 h-[1] bg-[#ffffff]",
+    "absolute left-0 right-0 bottom-0 h-[1] bg-[#aca899]",
+  ],
   menuItem: (open) =>
     open
       ? "h-[21] px-[7] flex-col justify-center bg-[#316ac5]"
       : "h-[21] px-[7] flex-col justify-center",
   menuText: (open) => (open ? "text-[#ffffff]" : "text-[#000000]"),
   taskbar:
-    "absolute left-0 right-0 bottom-0 h-[30] flex-row items-center bg-gradient-to-b from-[#1f80ff] via-[#0865dc] to-[#0340a6] pr-[3] gap-[3]",
+    "absolute left-0 right-0 bottom-0 h-[30] flex-row items-center bg-gradient-to-b from-[#2a8cff] via-[#0868df] to-[#003da2] pr-[3] gap-[3] overflow-hidden",
+  taskbarAccents: [
+    "absolute left-[2] right-[2] top-0 h-[1] bg-[#6db8ff]",
+    "absolute left-0 right-0 bottom-0 h-[1] bg-[#002b85]",
+  ],
   startButton: (open) =>
     open
-      ? "h-[30] w-[84] flex-row justify-center items-center gap-[4] rounded-lg bg-gradient-to-b from-[#1c6423] via-[#388e36] to-[#57b94a] border-[#7ed36b]"
-      : "h-[30] w-[84] flex-row justify-center items-center gap-[4] rounded-lg bg-gradient-to-b from-[#73cf61] via-[#43a044] to-[#216b28] border-[#9be58a]",
-  startText: "text-[#ffffff]",
+      ? "relative h-[30] w-[96] flex-row justify-center items-center gap-[5] rounded-lg bg-gradient-to-r from-[#4cb244] via-[#2f8f35] to-[#176222] border-[#0a5616] overflow-hidden"
+      : "relative h-[30] w-[96] flex-row justify-center items-center gap-[5] rounded-lg bg-gradient-to-r from-[#59bf48] via-[#329638] to-[#176222] border-[#0a5616] overflow-hidden",
+  startButtonAccents: (open) => [
+    open
+      ? "absolute left-[3] right-[3] top-[1] h-[5] rounded-md bg-gradient-to-b from-[#a2ec8b] to-[#51b84a]"
+      : "absolute left-[3] right-[3] top-[1] h-[5] rounded-md bg-gradient-to-b from-[#b3f59d] to-[#61c852]",
+    "absolute left-[2] top-[5] bottom-[4] w-[1] bg-[#78d363]",
+    "absolute right-[1] top-[4] bottom-[3] w-[2] bg-[#0a4a15]",
+    "absolute left-[4] right-[4] bottom-[1] h-[2] bg-[#0b4b16]",
+  ],
+  startText: "relative text-[#ffffff]",
+  startTextShadow: "absolute left-[1] top-[1] text-[#174d18]",
   taskDivider: "w-[1] h-[24] bg-[#79a8f3]",
   taskList: "flex-1 flex-row items-center gap-[3] overflow-hidden",
   taskButton: (active) =>
@@ -411,17 +500,29 @@ export const XP_THEME: DesktopTheme = {
         ? "text-[#ffffff]"
         : "text-[#000000]",
   startMenu:
-    "absolute flex-col overflow-hidden bg-[#ffffff] rounded-md border-[#0831d9]",
+    "absolute flex-col overflow-hidden bg-[#ffffff] rounded-lg border-[#00349b]",
+  startMenuAccents: [
+    "absolute left-[5] right-[5] top-[1] h-[1] bg-[#79c4ff]",
+    "absolute left-[1] top-[5] bottom-[4] w-[1] bg-[#278ef3]",
+    "absolute right-[1] top-[5] bottom-[4] w-[1] bg-[#003caa]",
+    "absolute left-[4] right-[4] bottom-[1] h-[1] bg-[#003caa]",
+  ],
+  startHeaderSeparator:
+    "absolute left-[2] right-[2] h-[2] bg-gradient-to-r from-[#df7d20] via-[#ffd08b] to-[#df7d20]",
+  startPaneDivider: "absolute w-[1] bg-[#95b9e8]",
+  startFooterSeparator:
+    "absolute left-[2] right-[2] h-[2] bg-gradient-to-r from-[#df7d20] via-[#ffd08b] to-[#df7d20]",
   startRail: "",
   startHeader:
-    "absolute left-0 right-0 top-0 h-[52] flex-row items-center gap-[8] px-[8] bg-gradient-to-b from-[#1e8cff] via-[#0866db] to-[#0649b6]",
+    "absolute left-[1] right-[1] top-[1] h-[51] flex-row items-center gap-[9] px-[8] bg-gradient-to-r from-[#177ee9] via-[#2b91f0] to-[#0755bd]",
   startAvatar:
-    "w-[38] h-[38] flex-col items-center justify-center rounded-sm bg-gradient-to-b from-[#ffffff] via-[#d9e8fa] to-[#9ab9df] border-[#ffffff]",
-  startHeaderText: "text-[#ffffff]",
+    "w-[40] h-[40] flex-col items-center justify-center rounded-sm bg-gradient-to-b from-[#ffffff] via-[#e6edf7] to-[#a9bdd8] border-[#ffffff]",
+  startHeaderText: "relative text-[#ffffff]",
+  startHeaderTextShadow: "absolute left-[1] top-[1] text-[#07438f]",
   startPrimaryPane: "absolute bg-[#ffffff]",
-  startSecondaryPane: "absolute bg-[#d3e5fa] border-[#9dbce7]",
+  startSecondaryPane: "absolute bg-[#d3e5fa]",
   startFooter:
-    "absolute left-0 right-0 bottom-0 h-[42] bg-gradient-to-b from-[#2d8bef] via-[#1267c8] to-[#074b9f]",
+    "absolute left-[1] right-[1] bottom-[1] h-[41] bg-gradient-to-r from-[#1677d8] via-[#2d8fea] to-[#0752ae]",
   startItem: (zone, hover) => {
     if (zone === "footer")
       return hover

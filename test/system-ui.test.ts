@@ -379,6 +379,18 @@ describe("dynamic theme geometry", () => {
       "icons/pocket-app.svg",
     );
   });
+
+  test("XP chrome keeps Luna edge layers aligned with its geometry", () => {
+    expect(xp.frame).toBe(3);
+    expect(xp.titleH).toBe(26);
+    expect(xp.taskStartW).toBe(96);
+    expect(XP_THEME.windowFrameAccents(true)).toHaveLength(6);
+    expect(XP_THEME.captionAccents(true)).toHaveLength(3);
+    expect(XP_THEME.captionButtonAccents("close", true)).toHaveLength(4);
+    expect(XP_THEME.captionTitleShadow(true)).not.toBeNull();
+    expect(XP_THEME.startButtonAccents(true)).toHaveLength(4);
+    expect(XP_THEME.startMenuAccents).toHaveLength(4);
+  });
 });
 
 describe("hitRegion", () => {
