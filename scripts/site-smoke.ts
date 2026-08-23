@@ -104,24 +104,29 @@ async function browserSmoke(origin: string): Promise<void> {
     };
     await command("Runtime.enable");
     await command("Page.enable");
-    await waitFor("the landing page", async () =>
-      (await evaluate<string>("document.querySelector('h1')?.textContent ?? ''")).includes("One process") ? true : null
-    );
-    await evaluate("document.querySelector('[data-theme-shot=classic]')?.click()");
-    await waitFor("the classic theme preview", async () =>
-      (await evaluate<string>("document.querySelector('#theme-screenshot')?.getAttribute('src') ?? ''")).endsWith("classic-theme.png") ? true : null
-    );
-    await evaluate("document.querySelector('#launch-preview')?.click()");
-    const ready = await waitFor<string>("the embedded WASM System", async () => {
-      const status = await evaluate<string>("document.querySelector('#preview-mount iframe')?.contentDocument?.querySelector('#status')?.textContent ?? ''");
+    await waitFor("the minimal landing page", async () => {
+      const state = await evaluate<{ heading: string; onlyMain: boolean; icon: string }>(`({
+        heading: document.querySelector('h1')?.textContent ?? '',
+        onlyMain: document.body.children.length === 1 && document.body.firstElementChild?.tagName === 'MAIN',
+        icon: document.querySelector('.coming-soon img')?.getAttribute('src') ?? ''
+      })`);
+      return state.heading === "Coming Soon" && state.onlyMain && state.icon === "/favicon.svg"
+        ? true
+        : null;
+    });
+    const screenshot = await command<{ data: string }>("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: false,
+    });
+    await Bun.write(resolve(ROOT, "dist/site-smoke.png"), Buffer.from(screenshot.data, "base64"));
+
+    await evaluate(`location.href = ${JSON.stringify(origin + "/play/")}`);
+    const ready = await waitFor<string>("the WASM System preview", async () => {
+      const status = await evaluate<string>("document.querySelector('#status')?.textContent ?? ''");
       return status.startsWith("Ready") ? status : null;
     }, 60_000);
-    await evaluate("document.documentElement.style.scrollBehavior='auto'; window.scrollTo(0, document.querySelector('.live-section').offsetTop); document.querySelectorAll('.reveal').forEach((node) => node.classList.add('shown'))");
-    await Bun.sleep(800);
-    const screenshot = await command<{ data: string }>("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-    await Bun.write(resolve(ROOT, "dist/site-smoke.png"), Buffer.from(screenshot.data, "base64"));
     if (pageErrors.length > 0) throw new Error("site browser errors:\n" + pageErrors.join("\n"));
-    console.log("Pocket Desktop site browser: theme switch and embedded preview " + ready);
+    console.log("Pocket Desktop site browser: minimal landing and WASM preview " + ready);
   } finally {
     socket?.close();
     chrome.kill();
@@ -189,8 +194,9 @@ try {
     if (!html.includes("Pocket Desktop")) throw new Error(route + " is not a Pocket Desktop document");
   }
   const home = await (await fetch(origin + "/")).text();
-  for (const contract of ["native process", "/play/", "25.35", "AppSupervisor", "GPLv3"]) {
-    if (!home.includes(contract)) throw new Error("landing page is missing contract: " + contract);
+  if (!home.includes("Coming Soon")) throw new Error("landing page is missing Coming Soon");
+  for (const removed of ["top-nav", "native process", "/play/", "AppSupervisor", "GPLv3"]) {
+    if (home.includes(removed)) throw new Error("landing page still contains removed content: " + removed);
   }
   const architecture = await (await fetch(origin + "/docs/architecture/")).text();
   for (const contract of ["ResolvedSystemPlan", "ui.compositor-surfaces", "raster-resource revision"]) {

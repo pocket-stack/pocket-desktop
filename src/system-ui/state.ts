@@ -8,6 +8,7 @@ import type { CaptionButton, Geo } from "./wm.ts";
 import type { Doc, History } from "./notepad.ts";
 import type { Mines } from "./mines.ts";
 import type { PocketAppSpec } from "./pocket-apps.ts";
+import type { StartMenuZone } from "./theme.ts";
 
 export type WinKind =
   "notepad" | "mines" | "folder" | "pocket" | "about" | "shutdown";
@@ -23,6 +24,8 @@ export interface MenuDef {
 export interface PopupItem {
   label: string;
   icon?: string;
+  /** XP Start menu column/footer placement. Classic ignores this field. */
+  startZone?: StartMenuZone;
   shortcut?: string;
   disabled?: boolean;
   /** Toggle state — renders a checkmark in the icon slot. */
@@ -91,6 +94,7 @@ export interface MinesData {
 export interface FolderRow {
   icon: string;
   name: string;
+  modified?: string;
   size: string;
   type: string;
   open?: () => void;
@@ -98,6 +102,7 @@ export interface FolderRow {
 
 export interface FolderData {
   kind: "folder";
+  location: string;
   rows: FolderRow[];
   selected: Ref<number>;
 }

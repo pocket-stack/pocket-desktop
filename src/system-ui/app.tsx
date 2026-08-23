@@ -117,6 +117,9 @@ import {
   DesktopIcons,
   PopupPanel,
   StartMenu,
+  startItemRect,
+  startMenuHeight,
+  startMenuItemAt,
   UiText,
   Taskbar,
 } from "./chrome.tsx";
@@ -183,12 +186,16 @@ function DesktopWindow(props: {
       }}
     >
       <View class={props.theme.caption(props.active)}>
-        <Image class={props.theme.captionIcon} src={w.icon} />
+        <Image
+          class={props.theme.captionIcon}
+          src={props.theme.iconSource(w.icon)}
+        />
         <View class="flex-1 flex-row overflow-hidden">
           <UiText
             bold
             cls={props.theme.captionTitle(props.active)}
             t={w.title}
+            theme={props.theme}
           />
         </View>
         <CaptionButtons win={w} active={props.active} theme={props.theme} />
@@ -202,6 +209,7 @@ function DesktopWindow(props: {
               <UiText
                 cls={props.theme.menuText(w.openMenu.value === i)}
                 t={menu.label}
+                theme={props.theme}
               />
             </View>
           ))}
@@ -256,6 +264,8 @@ export default function App() {
   const themeId = ref<ThemeId>("classic");
   const theme = () => themeById(themeId.value);
   const metrics = () => theme().metrics;
+  const uiFontSlot = () => theme().fontSlot(false, false);
+  const uiWidth = (text: string) => padWidth(text, uiFontSlot());
 
   // Non-reactive input state (nothing renders from these directly).
   let stack: number[] = []; // window ids, bottom → top
@@ -338,6 +348,8 @@ export default function App() {
     const next = themeById(nextId).metrics;
     themeId.value = nextId;
     for (const w of wins.value) {
+      for (const menu of w.menus ?? [])
+        menu.width = measure(menu.label, uiFontSlot()) + 12;
       const opts = chromeOpts(w);
       const minimum = reframeGeo(
         { x: 0, y: 0, w: w.minW, h: w.minH },
@@ -429,7 +441,7 @@ export default function App() {
       menus: [
         {
           label: "File",
-          width: measure("File") + 12,
+          width: measure("File", uiFontSlot()) + 12,
           items: () => [
             {
               label: "New",
@@ -452,7 +464,7 @@ export default function App() {
         },
         {
           label: "Edit",
-          width: measure("Edit") + 12,
+          width: measure("Edit", uiFontSlot()) + 12,
           items: () => [
             {
               label: "Undo",
@@ -512,7 +524,7 @@ export default function App() {
         },
         {
           label: "Help",
-          width: measure("Help") + 12,
+          width: measure("Help", uiFontSlot()) + 12,
           items: () => [{ label: "About Pocket Desktop", act: openAbout }],
         },
       ],
@@ -533,7 +545,12 @@ export default function App() {
     };
     const outer = reframeGeo(
       { x: 0, y: 0, w: MINES_GEO.w, h: MINES_GEO.h },
-      { menuWidths: [measure("Game") + 12, measure("Help") + 12] },
+      {
+        menuWidths: [
+          measure("Game", uiFontSlot()) + 12,
+          measure("Help", uiFontSlot()) + 12,
+        ],
+      },
       CLASSIC_THEME.metrics,
       metrics(),
     );
@@ -556,7 +573,7 @@ export default function App() {
       menus: [
         {
           label: "Game",
-          width: measure("Game") + 12,
+          width: measure("Game", uiFontSlot()) + 12,
           items: () => [
             {
               label: "New",
@@ -577,7 +594,7 @@ export default function App() {
         },
         {
           label: "Help",
-          width: measure("Help") + 12,
+          width: measure("Help", uiFontSlot()) + 12,
           items: () => [{ label: "About Pocket Desktop", act: openAbout }],
         },
       ],
@@ -633,14 +650,21 @@ export default function App() {
     title: string,
     icon: string,
     rows: FolderRow[],
-    geoW = 420,
-    geoH = 280,
+    geoW?: number,
+    geoH?: number,
   ) {
     const existing = wins.value.find(
       (w) => w.kind === "folder" && w.title === title,
     );
     if (existing) return raise(existing.id);
-    const data: FolderData = { kind: "folder", rows, selected: ref(-1) };
+    const data: FolderData = {
+      kind: "folder",
+      location: title,
+      rows,
+      selected: ref(-1),
+    };
+    const folderW = geoW ?? (themeId.value === "xp" ? 650 : 420);
+    const folderH = geoH ?? (themeId.value === "xp" ? 390 : 280);
     const w = createWin({
       kind: "folder",
       title,
@@ -649,8 +673,8 @@ export default function App() {
         wins.value.length,
         vp.value.w,
         vp.value.h,
-        geoW,
-        geoH,
+        folderW,
+        folderH,
         metrics(),
       ),
       minW: 260,
@@ -665,6 +689,7 @@ export default function App() {
       {
         icon: "icons/drive-16.svg",
         name: "(C:)",
+        modified: "Aug 23, 2026",
         size: "",
         type: "Local Disk",
         open: () => {
@@ -674,18 +699,21 @@ export default function App() {
       {
         icon: "icons/cdrom-16.svg",
         name: "(D:)",
+        modified: "Aug 17, 2026",
         size: "",
         type: "CD-ROM Disc",
       },
       {
         icon: "icons/folder-16.svg",
         name: "Control Panel",
+        modified: "Aug 23, 2026",
         size: "",
         type: "System Folder",
       },
       {
         icon: "icons/folder-16.svg",
         name: "Printers",
+        modified: "Aug 20, 2026",
         size: "",
         type: "System Folder",
       },
@@ -697,30 +725,35 @@ export default function App() {
       {
         icon: "icons/folder-16.svg",
         name: "Program Files",
+        modified: "Aug 23, 2026",
         size: "",
         type: "File Folder",
       },
       {
         icon: "icons/folder-16.svg",
         name: "Windows",
+        modified: "Aug 22, 2026",
         size: "",
         type: "File Folder",
       },
       {
         icon: "icons/file-16.svg",
         name: "AUTOEXEC.BAT",
+        modified: "Aug 23, 2026",
         size: "1 KB",
         type: "MS-DOS Batch File",
       },
       {
         icon: "icons/file-16.svg",
         name: "CONFIG.SYS",
+        modified: "Aug 23, 2026",
         size: "1 KB",
         type: "System file",
       },
       {
         icon: "icons/notepad-16.svg",
         name: "README.TXT",
+        modified: "Aug 23, 2026",
         size: "2 KB",
         type: "Text Document",
         open: () => {
@@ -735,6 +768,7 @@ export default function App() {
       {
         icon: "icons/notepad-16.svg",
         name: "welcome.txt",
+        modified: "Aug 23, 2026",
         size: "1 KB",
         type: "Text Document",
         open: () => {
@@ -844,73 +878,154 @@ export default function App() {
     );
   }
 
-  const startItems = (): PopupItem[] => [
+  const programItems = (): PopupItem[] => [
     {
-      label: "Programs",
-      icon: "icons/folder-16.svg",
-      sub: [
-        {
-          label: "Notepad",
-          icon: "icons/notepad-16.svg",
-          act: () => {
-            openNotepad("Untitled - Notepad", [""]);
-          },
-        },
-        { label: "Minesweeper", icon: "icons/mines-16.svg", act: openMines },
-        ...POCKET_APPS.map((app) => ({
-          label: app.title,
-          icon: POCKET_ICON_SMALL,
-          act: () => openPocketApp(app),
-        })),
-      ],
+      label: "Notepad",
+      icon: "icons/notepad-16.svg",
+      act: () => {
+        openNotepad("Untitled - Notepad", [""]);
+      },
     },
-    {
-      label: "Documents",
-      icon: "icons/folder-16.svg",
-      sub: [
-        {
-          label: "welcome.txt",
-          icon: "icons/notepad-16.svg",
-          act: () => {
-            openNotepad("welcome.txt - Notepad", WELCOME);
-          },
-        },
-      ],
-    },
-    {
-      label: "Settings",
-      icon: "icons/settings-16.svg",
-      sub: THEMES.map((item) => ({
-        label: item.label,
-        checked: item.id === themeId.value,
-        act: () => {
-          setTheme(item.id);
-        },
-      })),
-    },
-    { label: "Find", icon: "icons/find-16.svg", disabled: true },
-    { label: "Help", icon: "icons/help-16.svg", act: openAbout },
-    { label: "Run...", icon: "icons/run-16.svg", disabled: true },
-    { sep: true, label: "" },
-    { label: "Shut Down...", icon: "icons/shutdown-16.svg", act: openShutdown },
+    { label: "Minesweeper", icon: "icons/mines-16.svg", act: openMines },
+    ...POCKET_APPS.map((app) => ({
+      label: app.title,
+      icon: POCKET_ICON_SMALL,
+      act: () => openPocketApp(app),
+    })),
   ];
 
-  const START_ROW = 26;
+  const themeItems = () =>
+    THEMES.map((item) => ({
+      label: item.label,
+      checked: item.id === themeId.value,
+      act: () => {
+        setTheme(item.id);
+      },
+    }));
+
+  const startItems = (): PopupItem[] =>
+    themeId.value === "xp"
+      ? [
+          {
+            label: "Notepad",
+            icon: "icons/notepad-16.svg",
+            startZone: "primary",
+            act: () => openNotepad("Untitled - Notepad", [""]),
+          },
+          {
+            label: "Minesweeper",
+            icon: "icons/mines-16.svg",
+            startZone: "primary",
+            act: openMines,
+          },
+          {
+            label: "Pocket Apps",
+            icon: POCKET_ICON_SMALL,
+            startZone: "primary",
+            sub: POCKET_APPS.map((app) => ({
+              label: app.title,
+              icon: POCKET_ICON_SMALL,
+              act: () => openPocketApp(app),
+            })),
+          },
+          ...POCKET_APPS.slice(0, 3).map((app) => ({
+            label: app.title,
+            icon: POCKET_ICON_SMALL,
+            startZone: "primary" as const,
+            act: () => openPocketApp(app),
+          })),
+          { sep: true, label: "", startZone: "primary" },
+          {
+            label: "All Programs",
+            icon: "icons/folder-16.svg",
+            startZone: "primary",
+            sub: programItems(),
+          },
+          {
+            label: "My Documents",
+            icon: "icons/folder-16.svg",
+            startZone: "secondary",
+            act: openDocuments,
+          },
+          {
+            label: "My Computer",
+            icon: "icons/computer-16.svg",
+            startZone: "secondary",
+            act: openMyComputer,
+          },
+          {
+            label: "Control Panel",
+            icon: "icons/settings-16.svg",
+            startZone: "secondary",
+            sub: themeItems(),
+          },
+          {
+            label: "Help and Support",
+            icon: "icons/help-16.svg",
+            startZone: "secondary",
+            act: openAbout,
+          },
+          {
+            label: "Search",
+            icon: "icons/find-16.svg",
+            startZone: "secondary",
+            disabled: true,
+          },
+          {
+            label: "Run...",
+            icon: "icons/run-16.svg",
+            startZone: "secondary",
+            disabled: true,
+          },
+          {
+            label: "Log Off",
+            icon: "icons/xp-logoff-16.svg",
+            startZone: "footer",
+            disabled: true,
+          },
+          {
+            label: "Turn Off Computer",
+            icon: "icons/shutdown-16.svg",
+            startZone: "footer",
+            act: openShutdown,
+          },
+        ]
+      : [
+          { label: "Programs", icon: "icons/folder-16.svg", sub: programItems() },
+          {
+            label: "Documents",
+            icon: "icons/folder-16.svg",
+            sub: [
+              {
+                label: "welcome.txt",
+                icon: "icons/notepad-16.svg",
+                act: () => openNotepad("welcome.txt - Notepad", WELCOME),
+              },
+            ],
+          },
+          {
+            label: "Settings",
+            icon: "icons/settings-16.svg",
+            sub: themeItems(),
+          },
+          { label: "Find", icon: "icons/find-16.svg", disabled: true },
+          { label: "Help", icon: "icons/help-16.svg", act: openAbout },
+          { label: "Run...", icon: "icons/run-16.svg", disabled: true },
+          { sep: true, label: "" },
+          {
+            label: "Shut Down...",
+            icon: "icons/shutdown-16.svg",
+            act: openShutdown,
+          },
+        ];
+
   const START_SEP = 8;
-  const startH = () =>
-    2 + startItems().reduce((a, it) => a + (it.sep ? START_SEP : START_ROW), 0);
+  const startH = () => startMenuHeight(startItems(), theme());
   const startY = () => vp.value.h - metrics().taskH - startH();
 
   function startItemAt(x: number, y: number): number {
     const items = startItems();
-    if (x < 2 + 25 || x >= 2 + 182 - 1) return -1;
-    let oy = startY() + 1;
-    for (let i = 0; i < items.length; i++) {
-      const h = items[i].sep ? START_SEP : START_ROW;
-      if (y >= oy && y < oy + h) return items[i].sep ? -1 : i;
-      oy += h;
-    }
-    return -1;
+    return startMenuItemAt(items, theme(), x - 2, y - startY());
   }
 
   function buildPopup(x: number, y: number, items: PopupItem[]): Popup {
@@ -920,8 +1035,8 @@ export default function App() {
       w = Math.max(
         w,
         26 +
-          measure(it.label) +
-          (it.shortcut ? 20 + measure(it.shortcut) : 0) +
+          measure(it.label, uiFontSlot()) +
+          (it.shortcut ? 20 + measure(it.shortcut, uiFontSlot()) : 0) +
           (it.sub ? 14 : 0) +
           14,
       );
@@ -1021,11 +1136,11 @@ export default function App() {
     const d = padOf(w);
     const vrow = Math.floor((cy - 3 + d.scroll.value) / PAD_LINE_H);
     return caretAtPoint(
-      padSegs(w, metrics().frame),
+      padSegs(w, metrics().frame, uiFontSlot()),
       d.doc.value.lines,
       vrow,
       cx - 3,
-      padWidth,
+      uiWidth,
     );
   }
 
@@ -1191,7 +1306,7 @@ export default function App() {
     }
     if (w.kind === "folder") {
       const d = folderOf(w);
-      const row = folderRowAt(cy, d.rows.length);
+      const row = folderRowAt(cx, cy, d.rows.length, theme());
       d.selected.value = row;
       if (row >= 0 && isDblClick(`row:${w.id}:${row}`)) d.rows[row].open?.();
       return;
@@ -1329,12 +1444,15 @@ export default function App() {
         const item = startItems()[i];
         if (item.sub) {
           if (startFly.value?.index !== i) {
-            let oy = startY() + 1;
-            for (let k = 0; k < i; k++)
-              oy += startItems()[k].sep ? START_SEP : START_ROW;
+            const items = startItems();
+            const rect = startItemRect(items, i, theme());
             startFly.value = {
               index: i,
-              popup: buildPopup(2 + 182 - 3, oy, item.sub),
+              popup: buildPopup(
+                2 + rect.x + rect.w - 3,
+                startY() + rect.y,
+                item.sub,
+              ),
             };
             flyHover.value = -1;
           }
@@ -1675,8 +1793,8 @@ export default function App() {
             doc,
             k as CaretMove,
             ev.sh ?? false,
-            padSegs(w, metrics().frame),
-            padWidth,
+            padSegs(w, metrics().frame, uiFontSlot()),
+            uiWidth,
           );
           break;
         default:
@@ -1706,10 +1824,10 @@ export default function App() {
   function scrollCaretIntoView(w: WinCtl) {
     const d = padOf(w);
     const vrow = caretXY(
-      padSegs(w, metrics().frame),
+      padSegs(w, metrics().frame, uiFontSlot()),
       d.doc.value.lines,
       d.doc.value.caret,
-      padWidth,
+      uiWidth,
     ).vrow;
     const y = vrow * PAD_LINE_H;
     const viewH = padViewH(w);
@@ -1863,7 +1981,9 @@ export default function App() {
         if (hover?.win.kind === "notepad") {
           const d = padOf(hover.win);
           const contentH =
-            padSegs(hover.win, metrics().frame).length * PAD_LINE_H + 6;
+            padSegs(hover.win, metrics().frame, uiFontSlot()).length *
+              PAD_LINE_H +
+            6;
           const maxY = Math.max(0, contentH - padViewH(hover.win));
           d.scroll.value = Math.max(
             0,
@@ -1913,10 +2033,10 @@ export default function App() {
       const g = fw.geo.value;
       const doc = d.doc.value;
       const pos = caretXY(
-        padSegs(fw, metrics().frame),
+        padSegs(fw, metrics().frame, uiFontSlot()),
         doc.lines,
         doc.caret,
-        padWidth,
+        uiWidth,
       );
       const x = g.x + metrics().frame + 4 + pos.x;
       const y =

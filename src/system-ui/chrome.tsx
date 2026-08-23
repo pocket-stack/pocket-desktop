@@ -11,28 +11,37 @@
 
 import { Image, Text, View } from "@pocketjs/framework/components";
 import {
-  FONT,
-  FONT_B,
-  FONT_XL,
   type DesktopTheme,
+  type StartMenuZone,
 } from "./theme.ts";
-import type { DeskIcon, Popup, TaskEntry, WinCtl } from "./state.ts";
+import type {
+  DeskIcon,
+  Popup,
+  PopupItem,
+  TaskEntry,
+  WinCtl,
+} from "./state.ts";
 import { desktopIconPosition } from "./wm.ts";
 
-/** W95FA text. Slots 19/20/21 ride the style prop — the class table never
- *  sees them (baked per-app via pak.json, docs in gen-assets.ts). Text rides
- *  the `t` prop; `cls` replaces the class attr so nothing falls through to
- *  a user component's attrs. */
+/** Theme-selected baked text. Classic uses W95FA slots 19/20/21; XP uses
+ *  anti-aliased Inter-derived slots 22/23. The slots ride the style prop, so
+ *  the class table does not need to know about app-local font families. */
 export function UiText(props: {
   t: string;
   cls?: string;
   bold?: boolean;
   xl?: boolean;
+  theme: DesktopTheme;
 }) {
   return (
     <Text
       class={props.cls ?? "text-[#000000]"}
-      style={{ fontSlot: props.xl ? FONT_XL : props.bold ? FONT_B : FONT }}
+      style={{
+        fontSlot: props.theme.fontSlot(
+          props.bold ?? false,
+          props.xl ?? false,
+        ),
+      }}
     >
       {props.t}
     </Text>
@@ -90,8 +99,16 @@ export function Taskbar(props: {
       <View
         class={props.theme.startButton(props.startOpen)}
       >
-        <Image class="w-[16] h-[16]" src="icons/start-logo.svg" />
-        <UiText bold cls={props.theme.startText} t="Start" />
+        <Image
+          class="w-[18] h-[18]"
+          src={props.theme.iconSource("icons/start-logo.svg")}
+        />
+        <UiText
+          bold
+          cls={props.theme.startText}
+          t={props.theme.id === "xp" ? "start" : "Start"}
+          theme={props.theme}
+        />
       </View>
       <View class={props.theme.taskDivider} />
       <View class={props.theme.taskList}>
@@ -100,19 +117,23 @@ export function Taskbar(props: {
             class={props.theme.taskButton(entry.id === props.activeId)}
             style={{ width: props.buttonW }}
           >
-            <Image class="w-[16] h-[16]" src={entry.icon} />
+            <Image
+              class="w-[16] h-[16]"
+              src={props.theme.iconSource(entry.icon)}
+            />
             <View class="flex-1 flex-row overflow-hidden">
               <UiText
                 bold={entry.id === props.activeId}
                 cls={props.theme.taskText(entry.id === props.activeId)}
                 t={entry.title}
+                theme={props.theme}
               />
             </View>
           </View>
         ))}
       </View>
       <View class={props.theme.tray}>
-        <UiText cls={props.theme.trayText} t={props.clock} />
+        <UiText cls={props.theme.trayText} t={props.clock} theme={props.theme} />
       </View>
     </View>
   );
@@ -149,9 +170,15 @@ export function PopupPanel(props: {
             )}
           >
             {item.checked ? (
-              <Image class="w-[16] h-[16]" src="icons/check-16.svg" />
+              <Image
+                class="w-[16] h-[16]"
+                src={props.theme.iconSource("icons/check-16.svg")}
+              />
             ) : item.icon ? (
-              <Image class="w-[16] h-[16]" src={item.icon} />
+              <Image
+                class="w-[16] h-[16]"
+                src={props.theme.iconSource(item.icon)}
+              />
             ) : (
               <View class="w-[16] h-[16]" />
             )}
@@ -165,6 +192,7 @@ export function PopupPanel(props: {
                       : "normal",
                 )}
                 t={item.label}
+                theme={props.theme}
               />
             </View>
             {item.shortcut ? (
@@ -177,10 +205,14 @@ export function PopupPanel(props: {
                       : "normal",
                 )}
                 t={item.shortcut}
+                theme={props.theme}
               />
             ) : null}
             {item.sub ? (
-              <Image class="w-[8] h-[8] ml-[2]" src="icons/menu-arrow.svg" />
+              <Image
+                class="w-[8] h-[8] ml-[2]"
+                src={props.theme.iconSource("icons/menu-arrow.svg")}
+              />
             ) : null}
           </View>
         ),
@@ -189,7 +221,117 @@ export function PopupPanel(props: {
   );
 }
 
-/** The Start menu: theme rail + 26px rows; flyouts render as PopupPanels. */
+export interface StartItemRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  zone: StartMenuZone;
+}
+
+function zoneOf(item: PopupItem): StartMenuZone {
+  return item.startZone ?? "primary";
+}
+
+function zoneHeight(
+  items: PopupItem[],
+  zone: StartMenuZone,
+  theme: DesktopTheme,
+): number {
+  const m = theme.metrics;
+  return items
+    .filter((item) => zoneOf(item) === zone)
+    .reduce((sum, item) => sum + (item.sep ? m.startSepH : m.startRowH), 0);
+}
+
+export function startMenuHeight(
+  items: PopupItem[],
+  theme: DesktopTheme,
+): number {
+  const m = theme.metrics;
+  if (theme.id === "classic") return 2 + zoneHeight(items, "primary", theme);
+  const bodyH = Math.max(
+    196,
+    zoneHeight(items, "primary", theme),
+    zoneHeight(items, "secondary", theme),
+  );
+  return m.startHeaderH + bodyH + m.startFooterH;
+}
+
+export function startItemRect(
+  items: PopupItem[],
+  index: number,
+  theme: DesktopTheme,
+): StartItemRect {
+  const m = theme.metrics;
+  const item = items[index];
+  const zone = zoneOf(item);
+  if (theme.id === "classic") {
+    let y = 1;
+    for (let i = 0; i < index; i++)
+      y += items[i].sep ? m.startSepH : m.startRowH;
+    return {
+      x: 25,
+      y,
+      w: m.startMenuW - 26,
+      h: item.sep ? m.startSepH : m.startRowH,
+      zone,
+    };
+  }
+
+  const totalH = startMenuHeight(items, theme);
+  if (zone === "footer") {
+    const footer = items.filter((entry) => zoneOf(entry) === "footer" && !entry.sep);
+    const at = footer.indexOf(item);
+    const cellW = Math.floor(m.startMenuW / Math.max(1, footer.length));
+    return {
+      x: at * cellW + 4,
+      y: totalH - m.startFooterH + 5,
+      w: cellW - 8,
+      h: 32,
+      zone,
+    };
+  }
+
+  const primaryW = 184;
+  const sameZoneBefore = items.slice(0, index).filter((entry) => zoneOf(entry) === zone);
+  const y =
+    m.startHeaderH +
+    sameZoneBefore.reduce(
+      (sum, entry) => sum + (entry.sep ? m.startSepH : m.startRowH),
+      0,
+    );
+  return {
+    x: zone === "primary" ? 0 : primaryW,
+    y,
+    w: zone === "primary" ? primaryW : m.startMenuW - primaryW,
+    h: item.sep ? m.startSepH : m.startRowH,
+    zone,
+  };
+}
+
+export function startMenuItemAt(
+  items: PopupItem[],
+  theme: DesktopTheme,
+  x: number,
+  y: number,
+): number {
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].sep) continue;
+    const rect = startItemRect(items, i, theme);
+    if (
+      x >= rect.x &&
+      x < rect.x + rect.w &&
+      y >= rect.y &&
+      y < rect.y + rect.h
+    )
+      return i;
+  }
+  return -1;
+}
+
+/** The Start menu. Classic uses its vertical rail; XP uses a user header,
+ *  two-column application/system body and session footer. */
 export function StartMenu(props: {
   x: number;
   y: number;
@@ -198,6 +340,116 @@ export function StartMenu(props: {
   hover: number;
   theme: DesktopTheme;
 }) {
+  if (props.theme.id === "xp") {
+    const m = props.theme.metrics;
+    const bodyH = props.h - m.startHeaderH - m.startFooterH;
+    return (
+      <View
+        class={props.theme.startMenu}
+        style={{
+          insetL: 0,
+          insetT: 0,
+          translateX: props.x,
+          translateY: props.y,
+          width: m.startMenuW,
+          height: props.h,
+          zIndex: 19000,
+        }}
+      >
+        <View class={props.theme.startHeader}>
+          <View class={props.theme.startAvatar}>
+            <Image
+              class="w-[28] h-[28]"
+              src={props.theme.iconSource("icons/computer.svg")}
+            />
+          </View>
+          <UiText
+            bold
+            cls={props.theme.startHeaderText}
+            t="Pocket Desktop"
+            theme={props.theme}
+          />
+        </View>
+        <View
+          class={props.theme.startPrimaryPane}
+          style={{
+            insetL: 0,
+            insetT: m.startHeaderH,
+            width: 184,
+            height: bodyH,
+          }}
+        />
+        <View
+          class={props.theme.startSecondaryPane}
+          style={{
+            insetL: 184,
+            insetT: m.startHeaderH,
+            width: m.startMenuW - 184,
+            height: bodyH,
+          }}
+        />
+        <View class={props.theme.startFooter} />
+        {props.items.map((item, i) => {
+          const rect = startItemRect(props.items, i, props.theme);
+          if (item.sep)
+            return (
+              <View
+                class={props.theme.startSeparator(rect.zone)}
+                style={{
+                  insetL: 0,
+                  insetT: 0,
+                  translateX: rect.x,
+                  translateY: rect.y,
+                  width: rect.w,
+                  height: rect.h,
+                }}
+              >
+                <View class={props.theme.popupSeparatorDark} />
+                <View class={props.theme.popupSeparatorLight} />
+              </View>
+            );
+          const state = item.disabled
+            ? "disabled"
+            : props.hover === i
+              ? "hover"
+              : "normal";
+          return (
+            <View
+              class={props.theme.startItem(rect.zone, props.hover === i && !item.disabled)}
+              style={{
+                insetL: 0,
+                insetT: 0,
+                translateX: rect.x,
+                translateY: rect.y,
+                width: rect.w,
+                height: rect.h,
+              }}
+            >
+              <Image
+                class={props.theme.startItemIcon(rect.zone)}
+                src={props.theme.iconSource(item.icon ?? "")}
+              />
+              <View class="flex-1 flex-row overflow-hidden">
+                <UiText
+                  bold={rect.zone !== "footer" && i < 3}
+                  cls={props.theme.startItemText(rect.zone, state)}
+                  t={item.label}
+                  theme={props.theme}
+                />
+              </View>
+              {item.sub ? (
+                <Image
+                  class="w-[8] h-[8]"
+                  src={props.theme.iconSource("icons/menu-arrow.svg")}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
+
   return (
     <View
       class={props.theme.startMenu}
@@ -206,7 +458,7 @@ export function StartMenu(props: {
         insetT: 0,
         translateX: props.x,
         translateY: props.y,
-        width: 182,
+        width: props.theme.metrics.startMenuW,
         height: props.h,
         zIndex: 19000,
       }}
@@ -215,20 +467,25 @@ export function StartMenu(props: {
       <View class="flex-1 flex-col">
         {props.items.map((item, i) =>
           item.sep ? (
-            <View class="h-[8] flex-col justify-center px-[2]">
+            <View class={props.theme.startSeparator("primary")}>
               <View class={props.theme.popupSeparatorDark} />
               <View class={props.theme.popupSeparatorLight} />
             </View>
           ) : (
             <View
               class={props.theme.startItem(
+                "primary",
                 props.hover === i && !item.disabled,
               )}
             >
-              <Image class="w-[16] h-[16]" src={item.icon ?? ""} />
+              <Image
+                class={props.theme.startItemIcon("primary")}
+                src={props.theme.iconSource(item.icon ?? "")}
+              />
               <View class="flex-1 flex-row">
                 <UiText
-                  cls={props.theme.popupText(
+                  cls={props.theme.startItemText(
+                    "primary",
                     item.disabled
                       ? "disabled"
                       : props.hover === i
@@ -236,10 +493,14 @@ export function StartMenu(props: {
                         : "normal",
                   )}
                   t={item.label}
+                  theme={props.theme}
                 />
               </View>
               {item.sub ? (
-                <Image class="w-[8] h-[8]" src="icons/menu-arrow.svg" />
+                <Image
+                  class="w-[8] h-[8]"
+                  src={props.theme.iconSource("icons/menu-arrow.svg")}
+                />
               ) : null}
             </View>
           ),
@@ -266,11 +527,18 @@ export function DesktopIcons(props: {
             translateY: desktopIconPosition(i, props.rows).y,
           }}
         >
-          <Image class="w-[32] h-[32]" src={icon.icon} />
+          <Image
+            class="w-[32] h-[32]"
+            src={props.theme.iconSource(icon.icon)}
+          />
           <View
             class={props.selected === i ? props.theme.desktopSelection : "px-[2]"}
           >
-            <UiText cls={props.theme.desktopLabel} t={icon.label} />
+            <UiText
+              cls={props.theme.desktopLabel}
+              t={icon.label}
+              theme={props.theme}
+            />
           </View>
         </View>
       ))}

@@ -4,10 +4,12 @@
 //
 //   bun src/system-ui/gen-assets.ts
 //
-// Slots (repo slots 0..18 are Inter/JetBrains Mono; these live app-side):
+// Slots (repo slots 0..18 are the default Inter/JetBrains Mono table):
 //   19  W95FA 12.5px regular — the whole desktop
 //   20  W95FA 12.5px synthetic bold (GDI smear: 1px max-blend + advance+1)
 //   21  W95FA 25px regular — the Start-menu banner
+//   22  Inter 12px regular — XP/Tahoma-like anti-aliased UI text
+//   23  Inter 13px bold — XP title and emphasis text
 //
 // W95FA is a bitmap-font conversion on an 80-units/px grid at its native
 // 12.5px, with sloppy CFF floats (…129.92 for 130) and a 10-unit x phase.
@@ -23,6 +25,8 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   bakeSlot,
+  DEFAULT_BOLD,
+  DEFAULT_REGULAR,
   type BakedAtlas,
 } from "../../vendor/pocketjs/framework/compiler/bake-font.ts";
 import {
@@ -188,6 +192,8 @@ function embolden(src: BakedAtlas, slot: number): Uint8Array {
 }
 
 const font = await loadSnapped();
+const xpRegular = parseFont(await Bun.file(DEFAULT_REGULAR).arrayBuffer());
+const xpBold = parseFont(await Bun.file(DEFAULT_BOLD).arrayBuffer());
 
 for (const density of [1, 2]) {
   const suffix = density === 2 ? "@2x" : "";
@@ -208,11 +214,19 @@ for (const density of [1, 2]) {
   }
   if (!hCell.some((b) => b > 0)) throw new Error("gen-assets: 'h' baked empty");
   const a20 = embolden(a19, 20);
+  // Unlike the Classic bitmap treatment, XP keeps subpixel coverage. The
+  // smoother atlas is the visible distinction between 95-era MS Sans Serif
+  // and the Tahoma-like Luna UI family.
+  const a22 = bakeSlot(xpRegular, 22, 12, false, CHARS, density);
+  const a23 = bakeSlot(xpBold, 23, 13, true, CHARS, density);
   await Bun.write(join(OUT, `w95fa-19${suffix}.bin`), a19.bytes);
   await Bun.write(join(OUT, `w95fa-20${suffix}.bin`), a20);
   await Bun.write(join(OUT, `w95fa-21${suffix}.bin`), a21.bytes);
+  await Bun.write(join(OUT, `xp-ui-22${suffix}.bin`), a22.bytes);
+  await Bun.write(join(OUT, `xp-title-23${suffix}.bin`), a23.bytes);
   console.log(
     `gen-assets: density ${density} — slot19 ${a19.bytes.length}B (AA ${(aa19 * 100).toFixed(2)}%), ` +
-      `slot20 ${a20.length}B, slot21 ${a21.bytes.length}B (AA ${(aa21 * 100).toFixed(2)}%)`,
+      `slot20 ${a20.length}B, slot21 ${a21.bytes.length}B (AA ${(aa21 * 100).toFixed(2)}%), ` +
+      `XP slots ${a22.bytes.length}B/${a23.bytes.length}B`,
   );
 }
