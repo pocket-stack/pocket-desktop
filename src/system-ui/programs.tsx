@@ -1,12 +1,12 @@
 // src/system-ui/programs.tsx — the window contents: Notepad (with selection),
 // Minesweeper, the Explorer-style folder view, About and Shut Down dialogs.
-// Vue Vapor JSX, presentational like chrome.tsx; each program also exports
+// SolidJS JSX, presentational like chrome.tsx; each program also exports
 // the content-local hit helpers app.tsx routes clicks through, so render
 // geometry and hit geometry sit in one file. Content coordinates are
 // (cx, cy) from wm.ts hitRegion — origin at the frame's inner top-left,
 // below caption (and menu bar if present).
 
-import { computed } from "vue";
+import { createMemo } from "solid-js";
 import {
   CompositorSurface,
   Image,
@@ -18,8 +18,6 @@ import { FONT, type DesktopTheme, type FolderTool } from "./theme.ts";
 import {
   caretXY,
   segSelSpan,
-  segsFromBreaks,
-  wrapLine,
   type VSeg,
 } from "./notepad.ts";
 import { MINES_W, type Cell } from "./mines.ts";
@@ -46,13 +44,12 @@ export function measure(s: string, slot: number): number {
 export const PAD_LINE_H = 16;
 export const PAD_PAD = 3; // inset of the text from the white well
 
-// Wrap math runs on every render, keystroke and pointer move, so word/prefix
-// widths ride a bounded cache (advances are additive — a cached width is
-// exact forever; the atlas never changes at runtime).
+// Baked glyph advances serve caret and pointer geometry within accepted rows.
+// Whole-document wrapping is owned by the asynchronous Rust text service.
+// Slots identify immutable atlases, including across theme changes.
 const widthCache = new Map<string, number>();
 
-/** Cached width in one baked slot — the `width` function every wrap helper
- *  takes. The key carries the slot: a theme switch changes the face under
+/** Cached width in one baked slot for caret and selection helpers. The key carries the slot: a theme switch changes the face under
  *  the same strings. */
 export function padWidth(s: string, slot: number): number {
   if (s === "") return 0;
@@ -76,67 +73,41 @@ export function padWidthFor(slot: number): (s: string) => number {
  *  Word Wrap is off — every line becomes one visual segment. */
 export function padWrapW(w: WinCtl, frame: number): number {
   const d = w.data as PadData;
-  return d.wrap.value
-    ? Math.max(40, w.geo.value.w - frame * 2 - PAD_PAD * 2)
+  return d.wrap()
+    ? Math.max(40, w.geo().w - frame * 2 - PAD_PAD * 2)
     : Infinity;
 }
 
-/** One line's visual segments: the host wrapText op when present (spec op
- *  43 — the platform half: core greedy over the slot's measure provider,
- *  gpui's LineWrapper for native-text apps), else the same greedy rules in
- *  JS over measureText. A parity test pins the two equal on baked hosts. */
-function wrapLineHost(
-  line: string,
-  maxW: number,
-  slot: number,
-): { from: number; to: number }[] {
-  const ops = getOps();
-  if (Number.isFinite(maxW) && ops.wrapText) {
-    return segsFromBreaks(line.length, ops.wrapText(line, slot, maxW));
-  }
-  return wrapLine(line, maxW, padWidthFor(slot));
-}
-
-/** The whole document as visual segments through the host/fallback path. */
-export function wrapDocHost(
-  lines: string[],
-  maxW: number,
-  slot: number,
-): VSeg[] {
-  const out: VSeg[] = [];
-  for (let row = 0; row < lines.length; row++) {
-    for (const s of wrapLineHost(lines[row], maxW, slot))
-      out.push({ row, from: s.from, to: s.to });
-  }
-  return out;
-}
-
-/** The window's visual segments — the ONE layout both the render below and
- *  app.tsx hit-testing/caret movement read. */
+/** Geometry is accepted only with its source, width and font revision. */
 export function padSegs(w: WinCtl, frame: number, slot: number): VSeg[] {
-  const d = w.data as PadData;
-  return wrapDocHost(d.doc.value.lines, padWrapW(w, frame), slot);
+  const d = w.data as PadData, layout = d.layout();
+  return layout.status === "ready" && layout.lines === d.doc().lines &&
+    layout.width === padWrapW(w, frame) && layout.slot === slot ? layout.rows : [];
 }
 
 export function NotepadView(props: {
   data: PadData;
   wrapW: number;
+  viewH: number;
   active: boolean;
   theme: DesktopTheme;
 }) {
   const d = props.data;
   const slot = () => props.theme.fontSlot("ui");
-  const segsAll = () => wrapDocHost(d.doc.value.lines, props.wrapW, slot());
+  const segsAll = () => d.layout().rows;
+  const firstRow = () => Math.max(0, Math.floor(d.scroll() / PAD_LINE_H) - 1);
+  const visibleRows = () => segsAll().slice(firstRow(), firstRow() + Math.ceil(props.viewH / PAD_LINE_H) + 2);
+  const current = () => d.layout().status === "ready" && d.layout().lines === d.doc().lines && d.layout().slot === slot() && d.layout().width === props.wrapW;
   const caretPos = () =>
-    caretXY(segsAll(), d.doc.value.lines, d.doc.value.caret, padWidthFor(slot()));
+    caretXY(segsAll(), d.doc().lines, d.doc().caret, padWidthFor(slot()));
   const caretX = () => {
-    const pre = d.preedit.value;
+    const pre = d.preedit();
     return caretPos().x + (pre ? padWidth(pre.s.slice(0, pre.c), slot()) : 0);
   };
   /** Visual-segment text split at the selection edges. */
   const parts = (seg: VSeg): { t: string; sel: boolean }[] => {
-    const line = d.doc.value.lines[seg.row];
-    const span = segSelSpan(d.doc.value, seg);
+    const line = d.layout().lines[seg.row];
+    const span = current() ? segSelSpan(d.doc(), seg) : null;
     if (!span) return [{ t: line.slice(seg.from, seg.to), sel: false }];
     return [
       { t: line.slice(seg.from, span.from), sel: false },
@@ -146,30 +117,32 @@ export function NotepadView(props: {
   };
   return (
     <View class={props.theme.notepadWell}>
+      {d.layout().status === "companion-required" ? <UiText theme={props.theme} t="Pair a companion to enable text layout." /> : null}
+      {d.layout().status === "error" ? <UiText theme={props.theme} t={d.layout().error ?? "Text layout unavailable"} /> : null}
       <View class="flex-1 relative overflow-hidden">
         <View
           class="absolute left-[3] top-[3] right-0 flex-col"
-          style={{ translateY: -d.scroll.value }}
+          style={{ translateY: firstRow() * PAD_LINE_H - d.scroll() }}
         >
-          {segsAll().map((seg, vi) => (
+          {visibleRows().map((seg, vi) => (
             <View class="h-[16] flex-row items-center">
-              {vi === caretPos().vrow && d.preedit.value
+              {current() && vi + firstRow() === caretPos().vrow && d.preedit()
                 ? [
                     <UiText
                       theme={props.theme}
-                      t={d.doc.value.lines[seg.row].slice(
+                      t={d.doc().lines[seg.row].slice(
                         seg.from,
-                        d.doc.value.caret.col,
+                        d.doc().caret.col,
                       )}
                     />,
                     <View class="flex-col">
-                      <UiText theme={props.theme} t={d.preedit.value.s} />
+                      <UiText theme={props.theme} t={d.preedit()!.s} />
                       <View class="h-[1] bg-[#000000]" />
                     </View>,
                     <UiText
                       theme={props.theme}
-                      t={d.doc.value.lines[seg.row].slice(
-                        d.doc.value.caret.col,
+                      t={d.doc().lines[seg.row].slice(
+                        d.doc().caret.col,
                         seg.to,
                       )}
                     />,
@@ -186,14 +159,14 @@ export function NotepadView(props: {
             </View>
           ))}
         </View>
-        {props.active ? (
+        {props.active && current() ? (
           <View
             class="absolute w-[1] h-[14] bg-[#000000] animate-caret"
             style={{
               insetL: 0,
               insetT: 0,
               translateX: 3 + caretX(),
-              translateY: 3 + caretPos().vrow * PAD_LINE_H - d.scroll.value + 1,
+              translateY: 3 + caretPos().vrow * PAD_LINE_H - d.scroll() + 1,
             }}
           />
         ) : null}
@@ -348,7 +321,7 @@ function Digit(props: { ch: string }) {
 
 /** Three-digit 7-seg counter (mine count / timer), clamped to -99..999. */
 function Counter(props: { value: number; theme: DesktopTheme }) {
-  const text = computed(() => {
+  const text = createMemo(() => {
     const v = Math.max(-99, Math.min(999, Math.round(props.value)));
     return v < 0
       ? "-" + String(-v).padStart(2, "0")
@@ -356,9 +329,9 @@ function Counter(props: { value: number; theme: DesktopTheme }) {
   });
   return (
     <View class={props.theme.minesCounter}>
-      <Digit ch={text.value[0]} />
-      <Digit ch={text.value[1]} />
-      <Digit ch={text.value[2]} />
+      <Digit ch={text()[0]} />
+      <Digit ch={text()[1]} />
+      <Digit ch={text()[2]} />
     </View>
   );
 }
@@ -367,9 +340,9 @@ function Counter(props: { value: number; theme: DesktopTheme }) {
  *  on red), flag/mine art, colored adjacency digit. The cell faces are the
  *  theme's; the flag and mine are the game's own art on every theme. */
 function MinesCell(props: { data: MinesData; i: number; theme: DesktopTheme }) {
-  const c = (): Cell => props.data.board.value.cells[props.i];
+  const c = (): Cell => props.data.board().cells[props.i];
   const heldDown = () =>
-    props.data.held.value === props.i && c().state === "hidden";
+    props.data.held() === props.i && c().state === "hidden";
   // The hidden/revealed swap must sit in a JSX child position — a bare
   // ternary returned from the component body evaluates once at setup.
   return (
@@ -383,7 +356,7 @@ function MinesCell(props: { data: MinesData; i: number; theme: DesktopTheme }) {
       ) : (
         <View
           class={props.theme.minesCell(
-            props.data.board.value.bust === props.i ? "bust" : "revealed",
+            props.data.board().bust === props.i ? "bust" : "revealed",
           )}
         >
           {c().mine ? (
@@ -413,21 +386,21 @@ export function MinesView(props: {
 }) {
   const d = props.data;
   const smiley = () => {
-    if (d.smileyHeld.value) return "icons/smile.svg";
-    const m = d.board.value;
+    if (d.smileyHeld()) return "icons/smile.svg";
+    const m = d.board();
     if (m.phase === "lost") return "icons/smile-dead.svg";
     if (m.phase === "won") return "icons/smile-cool.svg";
-    if (d.held.value >= 0) return "icons/smile-ooh.svg";
+    if (d.held() >= 0) return "icons/smile-ooh.svg";
     return "icons/smile.svg";
   };
   return (
     <View class={props.theme.minesRoot}>
       <View class={props.theme.minesPanel}>
-        <Counter value={10 - d.board.value.flags} theme={props.theme} />
-        <View class={props.theme.minesSmiley(d.smileyHeld.value)}>
+        <Counter value={10 - d.board().flags} theme={props.theme} />
+        <View class={props.theme.minesSmiley(d.smileyHeld())}>
           <Image class="w-[16] h-[16]" src={smiley()} />
         </View>
-        <Counter value={d.elapsed.value} theme={props.theme} />
+        <Counter value={d.elapsed()} theme={props.theme} />
       </View>
       <View class="h-[6]" />
       <View class={props.theme.minesField}>
@@ -497,10 +470,10 @@ export function folderHit(
 
 /** Whether a toolbar action applies to the window's current history. */
 export function folderToolEnabled(d: FolderData, tool: FolderTool): boolean {
-  const h = d.hist.value;
+  const h = d.hist();
   if (tool === "back") return h.at > 0;
   if (tool === "forward") return h.at < h.items.length - 1;
-  return d.place.value !== "computer";
+  return d.place() !== "computer";
 }
 
 export function FolderView(props: {
@@ -510,8 +483,8 @@ export function FolderView(props: {
   theme: DesktopTheme;
 }) {
   const d = props.data;
-  const current = (i: number) => PLACES[i].id === d.place.value;
-  const place = () => PLACES.find((p) => p.id === d.place.value) ?? PLACES[0];
+  const current = (i: number) => PLACES[i].id === d.place();
+  const place = () => PLACES.find((p) => p.id === d.place()) ?? PLACES[0];
   return (
     <View class="flex-1 flex-col">
       <View class={props.theme.folderToolbar}>
@@ -522,7 +495,7 @@ export function FolderView(props: {
           <View
             class={props.theme.folderToolButton(
               folderToolEnabled(d, tool),
-              d.toolHeld.value === tool,
+              d.toolHeld() === tool,
             )}
           >
             <Image class="w-[16] h-[16]" src={props.theme.icon(tool, 16)} />
@@ -590,16 +563,16 @@ export function FolderView(props: {
             <UiText theme={props.theme} t="Type" />
           </View>
         </View>
-        {d.rows.value.map((row, i) => (
+        {d.rows().map((row, i) => (
           <View
-            class={props.theme.folderRow(d.selected.value === i, i % 2 === 1)}
+            class={props.theme.folderRow(d.selected() === i, i % 2 === 1)}
           >
             <Image class="w-[16] h-[16] mr-[4]" src={props.theme.icon(row.icon, 16)} />
             <View class="flex-1 flex-row overflow-hidden">
               <UiText
                 theme={props.theme}
                 cls={
-                  d.selected.value === i
+                  d.selected() === i
                     ? props.theme.selectionText
                     : "text-[#000000]"
                 }
@@ -610,7 +583,7 @@ export function FolderView(props: {
               <UiText
                 theme={props.theme}
                 cls={
-                  d.selected.value === i
+                  d.selected() === i
                     ? props.theme.selectionText
                     : "text-[#000000]"
                 }
@@ -621,7 +594,7 @@ export function FolderView(props: {
               <UiText
                 theme={props.theme}
                 cls={
-                  d.selected.value === i
+                  d.selected() === i
                     ? props.theme.selectionText
                     : "text-[#000000]"
                 }
@@ -630,7 +603,7 @@ export function FolderView(props: {
             </View>
           </View>
         ))}
-        {d.rows.value.length === 0 ? (
+        {d.rows().length === 0 ? (
           <View class="flex-1 flex-col justify-center items-center">
             <UiText theme={props.theme} cls={props.theme.mutedText} t="(empty)" />
           </View>
@@ -639,7 +612,7 @@ export function FolderView(props: {
       </View>
       <View class="h-[20] flex-row items-end gap-[2] pt-[2]">
         <View class={props.theme.statusWell}>
-          <UiText theme={props.theme} t={`${d.rows.value.length} object(s)`} />
+          <UiText theme={props.theme} t={`${d.rows().length} object(s)`} />
         </View>
         {props.resizable ? (
           <Image class="w-[16] h-[16]" src={props.theme.icon("grip", 16)} />
@@ -705,8 +678,8 @@ export function AboutView(props: {
         <View class={props.theme.popupSeparatorDark} />
         <View class={props.theme.popupSeparatorLight} />
       </View>
-      <UiText theme={props.theme} t="A desktop compositor demo on the gpui backend." />
-      <UiText theme={props.theme} t="Vue Vapor JSX over the same DrawList the" />
+      <UiText theme={props.theme} t="A desktop compositor demo on the portable Rust backend." />
+      <UiText theme={props.theme} t="SolidJS JSX over the same DrawList the" />
       <UiText theme={props.theme} t="consoles boot; windows, menus and shortcuts" />
       <UiText theme={props.theme} t="live in the guest." />
       <UiText
@@ -718,7 +691,7 @@ export function AboutView(props: {
       <View class="flex-row justify-end">
         <DialogButton
           label="OK"
-          armed={props.data.armed.value === "ok"}
+          armed={props.data.armed() === "ok"}
           primary
           theme={props.theme}
         />
@@ -758,7 +731,7 @@ export function ShutdownView(props: {
     <View class="h-[20] flex-row items-center gap-[6]">
       <View class="w-[12] h-[12] rounded-full bg-[#808080] flex-col justify-center items-center">
         <View class="w-[10] h-[10] rounded-full bg-[#ffffff] flex-col justify-center items-center">
-          {props.data.choice.value === i ? (
+          {props.data.choice() === i ? (
             <View class="w-[4] h-[4] rounded-full bg-[#000000]" />
           ) : null}
         </View>
@@ -783,13 +756,13 @@ export function ShutdownView(props: {
       <View class="flex-row justify-end gap-[6]">
         <DialogButton
           label="OK"
-          armed={props.data.armed.value === "ok"}
+          armed={props.data.armed() === "ok"}
           primary
           theme={props.theme}
         />
         <DialogButton
           label="Cancel"
-          armed={props.data.armed.value === "cancel"}
+          armed={props.data.armed() === "cancel"}
           theme={props.theme}
         />
       </View>

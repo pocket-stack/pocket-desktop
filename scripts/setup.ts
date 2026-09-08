@@ -22,8 +22,7 @@ const links = new Map<string, string>([
   ],
   ["node_modules/opentype.js", "vendor/pocketjs/node_modules/opentype.js"],
   ["node_modules/typescript", "vendor/pocketjs/node_modules/typescript"],
-  ["node_modules/vue", "vendor/pocketjs/node_modules/vue"],
-  ["node_modules/vue-jsx-vapor", "vendor/pocketjs/node_modules/vue-jsx-vapor"],
+  ["node_modules/solid-js", "vendor/pocketjs/node_modules/solid-js"],
 ]);
 
 for (const [destination, source] of links) {
@@ -48,4 +47,4 @@ if (!existsSync(generatedStyles)) {
   );
 }
 
-console.log("Pocket Desktop setup: PocketJS and Vue links ready");
+console.log("Pocket Desktop setup: PocketJS and SolidJS links ready");

@@ -13,7 +13,7 @@
 <span class="token prompt">$</span> bun run check</code></pre>
       <h2 id="macos">macOS</h2><p>Xcode command-line tools provide the native toolchain. The first command creates a release build; the second launches it.</p><pre><code><span class="token prompt">$</span> bun run build
 <span class="token prompt">$</span> bun run macos</code></pre>
-      <h2 id="linux">Linux</h2><p>The Linux host needs gpui's X11/Wayland, Fontconfig, Vulkan and audio development libraries. The package command emits a relocatable product directory and <code>pocket-desktop-linux-&lt;arch&gt;.tar.gz</code>.</p><pre><code><span class="token prompt">$</span> bun run package:linux
+      <h2 id="linux">Linux</h2><p>The Linux host needs the X11/Wayland and software presentation development libraries listed in CI. The package command emits a relocatable product directory and <code>pocket-desktop-linux-&lt;arch&gt;.tar.gz</code>.</p><pre><code><span class="token prompt">$</span> bun run package:linux
 <span class="token prompt">$</span> tar -xzf dist/linux-app/pocket-desktop-linux-*.tar.gz
 <span class="token prompt">$</span> ./PocketDesktop/bin/pocket-desktop</code></pre><p>The launcher resolves its own installation directory, sets the artifact root and gives the host the complete resolved System plan.</p>
       <h2 id="web">WebAssembly</h2><p>The browser preview runs the System UI and every installed app through PocketJS's WASM engine. Each app uses an independent iframe Realm and UI instance.</p><pre><code><span class="token prompt">$</span> bun run build:web

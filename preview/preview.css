@@ -16,7 +16,7 @@ body {
 }
 
 main {
-  width: min(100% - 32px, 1040px);
+  width: min(100% - 32px, 544px);
   margin: 0 auto;
   padding: 40px 0 56px;
 }
@@ -35,10 +35,13 @@ header {
 }
 
 .eyebrow { margin: 0 0 5px; text-transform: uppercase; letter-spacing: .12em; }
-h1 { margin: 0; font-size: clamp(30px, 5vw, 54px); line-height: 1; }
+h1 { margin: 0; font-size: clamp(30px, 5vw, 40px); line-height: 1; }
 .status { margin: 0; text-align: right; }
 
 .frame {
+  /* 800x600 backing pixels at 400x300 CSS pixels: exact 2x presentation. */
+  width: min(100%, 422px);
+  margin-inline: auto;
   padding: 10px;
   border: 1px solid #394267;
   border-radius: 14px;
@@ -52,7 +55,7 @@ canvas {
   height: auto;
   aspect-ratio: 4 / 3;
   background: #000;
-  image-rendering: pixelated;
+  image-rendering: auto;
   outline: none;
 }
 
@@ -74,8 +77,8 @@ pre {
 }
 
 @media (max-width: 640px) {
-  main { width: min(100% - 16px, 1040px); padding-top: 20px; }
+  main { width: min(100% - 16px, 544px); padding-top: 20px; }
   header { align-items: start; flex-direction: column; gap: 10px; }
   .status { text-align: left; }
-  .frame { padding: 5px; border-radius: 8px; }
+  .frame { width: min(100%, 412px); padding: 5px; border-radius: 8px; }
 }

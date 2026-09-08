@@ -8,12 +8,13 @@
 //      menu, paste-req — with guest intents (copy payloads!) asserted on
 //      the wire.
 //
-// The vue-vapor bundle must be prebuilt (the sim's fallback build cannot
+// The solid bundle must be prebuilt (the sim's fallback build cannot
 // resolve the framework-suffixed name):
 //
-//   bun tools/build.ts pocket-desktop-system-ui --framework=vue-vapor
+//   bun tools/build.ts pocket-desktop-system-ui --framework=solid
 //   bun test --conditions=browser test/system-ui-sim.test.ts
 
+import { testTextProvider } from "./text-provider.ts";
 import { describe, expect, test } from "bun:test";
 import {
   bootWorld,
@@ -27,7 +28,7 @@ import {
   XP_THEME,
 } from "../src/system-ui/theme.ts";
 
-const APP = "pocket-desktop-system-ui.vue-vapor";
+const APP = "pocket-desktop-system-ui";
 
 describe("pocket-desktop-system-ui boots standalone", () => {
   test("desktop, taskbar and the boot windows render", async () => {
@@ -35,7 +36,7 @@ describe("pocket-desktop-system-ui boots standalone", () => {
     expect(treeHasText(trace.tree, "Start")).toBe(true);
     expect(treeHasText(trace.tree, "Minesweeper")).toBe(true);
     expect(treeHasText(trace.tree, "My Computer")).toBe(true);
-    expect(treeHasText(trace.tree, "Welcome to Pocket Desktop.")).toBe(true);
+    expect(treeHasText(trace.tree, "Pair a companion to enable text layout.")).toBe(true);
   }, 30000);
 });
 
@@ -93,8 +94,7 @@ function mockSvc(): MockSvc {
   };
 }
 
-/** One frame + core catch-up + a microtask turn (Vue Vapor flushes
- *  dependent render effects in a microtask). */
+/** One frame transaction; asynchronous provider replies enter subsequent frames. */
 async function step(world: SimWorld, frames = 1): Promise<void> {
   for (let f = 0; f < frames; f++) {
     world.frame(0);
@@ -122,7 +122,10 @@ function treeHasClass(tree: unknown, className: string): boolean {
 describe("system-ui System UI companion journey", () => {
   test("switches classic, XP and Aqua paint at runtime", async () => {
     const svc = mockSvc();
-    const world = await bootWorld(APP, 60, undefined, svc.mutateOps);
+    const provider = await testTextProvider();
+    const world = await bootWorld(APP, 60, {offload: provider.ops}, svc.mutateOps);
+    const guestFrame = world.frame;
+    world.frame = (...args) => { provider.betweenFrames(); guestFrame(...args); };
     svc.push({ t: "hello", w: 800, h: 600, epoch: 1755650000000 });
     await step(world, 3);
 
@@ -199,10 +202,13 @@ describe("system-ui System UI companion journey", () => {
 
   test("typing, selection, ⌘ chords, context menu and paste-req", async () => {
     const svc = mockSvc();
-    const world = await bootWorld(APP, 60, undefined, svc.mutateOps);
+    const provider = await testTextProvider();
+    const world = await bootWorld(APP, 60, {offload: provider.ops}, svc.mutateOps);
+    const guestFrame = world.frame;
+    world.frame = (...args) => { provider.betweenFrames(); guestFrame(...args); };
     const EPOCH = 1755650000000;
     svc.push({ t: "hello", w: 800, h: 600, epoch: EPOCH });
-    await step(world, 3);
+    await step(world, 24);
 
     // With the companion connected only the welcome notepad boots (the
     // standalone extras — the My Computer folder with its status bar — stay
@@ -216,7 +222,7 @@ describe("system-ui System UI companion journey", () => {
 
     // Typing: ch lines land at the caret (doc origin), one char per line.
     for (const ch of ["H", "i"]) svc.push({ t: "ch", s: ch });
-    await step(world, 2);
+    await step(world, 24);
     tree = world.getTree();
     expect(treeHasText(tree, "HiWelcome to Pocket Desktop.")).toBe(true);
 
@@ -225,7 +231,7 @@ describe("system-ui System UI companion journey", () => {
     // 70,71; row 0 centers at y≈79).
     mouse(svc, 75, 79, true);
     mouse(svc, 75, 79, false);
-    await step(world);
+    await step(world, 2);
     mouse(svc, 75, 79, true);
     mouse(svc, 75, 79, false);
     await step(world, 2);
@@ -239,11 +245,11 @@ describe("system-ui System UI companion journey", () => {
     // copies a prefix of the row and the selected run renders as its own
     // navy segment (its text splits out of the full-line node).
     mouse(svc, 70, 79, true);
-    await step(world);
+    await step(world, 2);
     mouse(svc, 140, 79, false);
-    await step(world);
+    await step(world, 2);
     mouse(svc, 140, 79, false);
-    await step(world);
+    await step(world, 2);
     svc.push({ t: "key", k: "c", cmd: true });
     await step(world, 2);
     const copy2 = svc.sent().filter((l) => l.t === "copy")[1];
@@ -268,7 +274,7 @@ describe("system-ui System UI companion journey", () => {
     await step(world, 2);
     expect(svc.sent().some((l) => l.t === "paste-req")).toBe(true);
     svc.push({ t: "paste", text: "[PASTED]" });
-    await step(world, 2);
+    await step(world, 24);
     expect(treeHasText(world.getTree(), "[PASTED]")).toBe(true);
 
     // ⌘Esc toggles the Start menu.
@@ -292,21 +298,24 @@ describe("system-ui System UI companion journey", () => {
     // Undo/redo: a typing run coalesces into ONE unit — ⌘Z pulls both
     // characters back out at once, ⌘⇧Z replays them.
     for (const ch of ["Q", "Q"]) svc.push({ t: "ch", s: ch });
-    await step(world, 2);
+    await step(world, 24);
     expect(treeHasText(world.getTree(), "[PASTED]QQ")).toBe(true);
     svc.push({ t: "key", k: "z", cmd: true });
-    await step(world, 2);
+    await step(world, 24);
     const afterUndo = world.getTree();
     expect(treeHasText(afterUndo, "[PASTED]QQ")).toBe(false);
     expect(treeHasText(afterUndo, "[PASTED]")).toBe(true);
     svc.push({ t: "key", k: "z", cmd: true, sh: true });
-    await step(world, 2);
+    await step(world, 24);
     expect(treeHasText(world.getTree(), "[PASTED]QQ")).toBe(true);
   }, 30000);
 
   test("desktop windows bind package surfaces and publish native focus", async () => {
     const svc = mockSvc();
-    const world = await bootWorld(APP, 60, undefined, svc.mutateOps);
+    const provider = await testTextProvider();
+    const world = await bootWorld(APP, 60, {offload: provider.ops}, svc.mutateOps);
+    const guestFrame = world.frame;
+    world.frame = (...args) => { provider.betweenFrames(); guestFrame(...args); };
     svc.push({ t: "hello", w: 800, h: 600, epoch: 1755650000000 });
     await step(world, 3);
 

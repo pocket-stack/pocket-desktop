@@ -3,10 +3,10 @@
 // window's style binding, not the world; the window LIST only changes on
 // open/close (a reorder would rebuild the layout tree — z rides zIndex).
 
-import { ref, shallowRef, type Ref, type ShallowRef } from "vue";
+import { createState, type State } from "./reactivity.ts";
 import type { CaptionButton, Geo } from "./wm.ts";
 import type { FolderTool, IconName } from "./theme.ts";
-import type { Doc, History } from "./notepad.ts";
+import type { Doc, History, VSeg } from "./notepad.ts";
 import type { Mines } from "./mines.ts";
 import type { PocketAppSpec } from "./pocket-apps.ts";
 
@@ -52,53 +52,56 @@ export interface WinCtl {
   id: number;
   kind: WinKind;
   /** Reactive: a folder window renames itself as it navigates. */
-  title: Ref<string>;
+  title: State<string>;
   /** Semantic icon; the active theme resolves the artwork at paint time. */
-  icon: Ref<IconName>;
+  icon: State<IconName>;
   buttons: readonly CaptionButton[];
   resizable: boolean;
   minW: number;
   minH: number;
   menus: MenuDef[] | null;
-  geo: ShallowRef<Geo>;
-  z: Ref<number>;
-  minimized: Ref<boolean>;
-  maximized: Ref<boolean>;
+  geo: State<Geo>;
+  z: State<number>;
+  minimized: State<boolean>;
+  maximized: State<boolean>;
   /** Geometry to restore on un-maximize. */
   restoreGeo: Geo | null;
-  pressedBtn: Ref<CaptionButton | null>;
+  pressedBtn: State<CaptionButton | null>;
   /** Pointer over the caption's control cluster (Aqua reveals glyphs). */
-  captionHover: Ref<boolean>;
+  captionHover: State<boolean>;
   /** Open menu-bar index, -1 closed. */
-  openMenu: Ref<number>;
+  openMenu: State<number>;
   /** Program-specific state bag (PadData, MinesData, …). */
   data: unknown;
 }
 
-// Program state bags. Vue refs instead of accessor/setter pairs — templates
-// read `.value` explicitly (refs nested in objects never auto-unwrap).
+// Program state bags. Solid signals retain each window's independently owned state.
 
 export interface PadData {
   kind: "notepad";
-  doc: ShallowRef<Doc>;
-  scroll: Ref<number>;
-  preedit: Ref<{ s: string; c: number } | null>;
+  doc: State<Doc>;
+  scroll: State<number>;
+  preedit: State<{ s: string; c: number } | null>;
   /** Word wrap (Edit menu toggle): reflow to the window width. */
-  wrap: Ref<boolean>;
+  wrap: State<boolean>;
   /** Undo/redo snapshots (notepad.ts History). Plain field: nothing renders
    *  from it — the Edit/context menus read it when they build their items. */
   hist: History;
+  layout: State<{
+    status: "pending" | "ready" | "error" | "companion-required";
+    lines: string[]; rows: VSeg[]; width: number; slot: number; error?: string;
+  }>;
 }
 
 export interface MinesData {
   kind: "mines";
-  /** Mutated in place by mines.ts rules — re-assign + triggerRef to paint. */
-  board: ShallowRef<Mines>;
+  /** Mutated in place by mines.ts rules — publish through an always-notifying Solid signal. */
+  board: State<Mines>;
   /** Cell index held by the primary button, -1 none. */
-  held: Ref<number>;
-  smileyHeld: Ref<boolean>;
-  /** Seconds shown by the timer (app.vue advances it while playing). */
-  elapsed: Ref<number>;
+  held: State<number>;
+  smileyHeld: State<boolean>;
+  /** Seconds shown by the timer (app.tsx advances it while playing). */
+  elapsed: State<number>;
 }
 
 export interface FolderRow {
@@ -128,13 +131,13 @@ export const PLACES: readonly Place[] = [
 
 export interface FolderData {
   kind: "folder";
-  place: Ref<PlaceId>;
-  rows: ShallowRef<FolderRow[]>;
-  selected: Ref<number>;
+  place: State<PlaceId>;
+  rows: State<FolderRow[]>;
+  selected: State<number>;
   /** Navigation history: visited places and the cursor into them. */
-  hist: ShallowRef<{ items: PlaceId[]; at: number }>;
+  hist: State<{ items: PlaceId[]; at: number }>;
   /** Toolbar button held by the primary button, null none. */
-  toolHeld: Ref<FolderTool | null>;
+  toolHeld: State<FolderTool | null>;
 }
 
 export interface PocketData {
@@ -144,13 +147,13 @@ export interface PocketData {
 
 export interface AboutData {
   kind: "about";
-  armed: Ref<string | null>;
+  armed: State<string | null>;
 }
 
 export interface ShutdownData {
   kind: "shutdown";
-  choice: Ref<number>;
-  armed: Ref<string | null>;
+  choice: State<number>;
+  armed: State<string | null>;
 }
 
 export interface TaskEntry {
@@ -182,21 +185,21 @@ export function createWin(spec: {
   return {
     id: nextId++,
     kind: spec.kind,
-    title: ref(spec.title),
-    icon: ref<IconName>(spec.icon),
+    title: createState(spec.title),
+    icon: createState<IconName>(spec.icon),
     buttons: spec.buttons ?? ["min", "max", "close"],
     resizable: spec.resizable ?? true,
     minW: spec.minW ?? 200,
     minH: spec.minH ?? 120,
     menus: spec.menus ?? null,
-    geo: shallowRef<Geo>(spec.geo),
-    z: ref(0),
-    minimized: ref(false),
-    maximized: ref(false),
+    geo: createState<Geo>(spec.geo),
+    z: createState(0),
+    minimized: createState(false),
+    maximized: createState(false),
     restoreGeo: null,
-    pressedBtn: ref<CaptionButton | null>(null),
-    captionHover: ref(false),
-    openMenu: ref(-1),
+    pressedBtn: createState<CaptionButton | null>(null),
+    captionHover: createState(false),
+    openMenu: createState(-1),
     data: spec.data,
   };
 }
