@@ -17,7 +17,7 @@ const child = Bun.spawn(
     process.execPath,
     resolve(POCKETJS_ROOT, "tools/build.ts"),
     resolve(ROOT, "src/system-ui/main.tsx"),
-    "--framework=vue-vapor",
+    "--framework=solid",
     `--outdir=${SIM_DIST}`,
     ...(density ? [density] : []),
   ],
@@ -27,7 +27,7 @@ const code = await child.exited;
 if (code !== 0) process.exit(code);
 for (const extension of ["js", "pak"]) {
   renameSync(
-    resolve(SIM_DIST, `main.vue-vapor.${extension}`),
-    resolve(SIM_DIST, `pocket-desktop-system-ui.vue-vapor.${extension}`),
+    resolve(SIM_DIST, `main.${extension}`),
+    resolve(SIM_DIST, `pocket-desktop-system-ui.${extension}`),
   );
 }

@@ -44,7 +44,7 @@ beforeAll(async () => {
 const SAMPLES = [
   "",
   "Welcome to Pocket Desktop.",
-  "This desktop is one PocketJS guest: the windows, the taskbar, the Start menu and this Notepad are Vue Vapor JSX over the same DrawList contract the consoles boot, painted by the gpui backend.",
+  "This desktop is one PocketJS guest: the windows, the taskbar, the Start menu and this Notepad are SolidJS JSX over the same DrawList contract the consoles boot, painted by the portable Rust backend.",
   "  - drag-select this text; Cmd+C/X/V, right-click",
   "word",
   "spaces      hang    at   soft   breaks      ",

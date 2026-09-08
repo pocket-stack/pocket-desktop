@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { bootWorld } from "../vendor/pocketjs/hosts/sim/sim.ts";
 import { encodePNG } from "../vendor/pocketjs/tests/png.ts";
 import { ROOT } from "./system-plan.ts";
+import { testTextProvider } from "../test/text-provider.ts";
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -13,8 +14,13 @@ const viewport = {
   renderScale: SCALE,
 };
 
-async function settle(world: Awaited<ReturnType<typeof bootWorld>>, frames = 120) {
+const text = await testTextProvider();
+async function settle(
+  world: Awaited<ReturnType<typeof bootWorld>>,
+  frames = 120,
+) {
   for (let frame = 0; frame < frames; frame++) {
+    text.betweenFrames();
     world.frame(0);
     for (let tick = 0; tick < world.ticksPerFrame; tick++) world.tick();
     await Promise.resolve();
@@ -23,9 +29,9 @@ async function settle(world: Awaited<ReturnType<typeof bootWorld>>, frames = 120
 
 // Preserve the standalone classic composition used by the baseline benchmark.
 const classic = await bootWorld(
-  "pocket-desktop-system-ui.vue-vapor",
+  "pocket-desktop-system-ui",
   60,
-  undefined,
+  { offload: text.ops },
   undefined,
   viewport,
 );
@@ -43,9 +49,9 @@ console.log(`Pocket Desktop: captured ${classicOutput}`);
 // world walks Classic -> XP -> Aqua with ⌘⇧T, capturing each stop.
 const inbox: string[] = [];
 const xp = await bootWorld(
-  "pocket-desktop-system-ui.vue-vapor",
+  "pocket-desktop-system-ui",
   60,
-  undefined,
+  { offload: text.ops },
   (ops) => {
     ops.svcOpen = (name: string) => name === "system-ui";
     ops.svcPoll = () => {

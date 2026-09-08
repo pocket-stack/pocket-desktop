@@ -22,7 +22,13 @@ const receipt = await buildDesktopSystem({
 });
 await run([process.execPath, resolve(POCKETJS_ROOT, "tools/wasm.ts")], POCKETJS_ROOT);
 
+await run([process.execPath, resolve(POCKETJS_ROOT, "tools/text-wasm.ts")], POCKETJS_ROOT);
+
 for (const file of [
+  "offload-worker.js",
+  "text-worker.js",
+  "text-engine.js",
+  "pocket_text.wasm",
   "app-instance.html",
   "app-instance.js",
   "system-engine.js",

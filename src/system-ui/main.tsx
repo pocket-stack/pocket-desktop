@@ -1,4 +1,4 @@
-// src/system-ui/main.tsx — Pocket Desktop entry point (Vue Vapor, JSX).
+// src/system-ui/main.tsx — Pocket Desktop entry point (SolidJS, JSX).
 import { mount } from "@pocketjs/framework";
 import App from "./app.tsx";
 

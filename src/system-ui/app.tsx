@@ -1,6 +1,6 @@
 // src/system-ui/app.tsx — Pocket Desktop's theme-switchable System UI and
-// compositor shell — Vue Vapor, authored in JSX
-// (vue-jsx-vapor, the same path as apps/hero-vue-vapor).
+// compositor shell — SolidJS, authored in JSX
+// (SolidJS universal renderer, the same path as apps/hero).
 //
 // The compositor owns ALL input: the host forwards raw mouse/keyboard over
 // the desk svc dialect (svc.ts), and this file routes every event itself —
@@ -20,7 +20,9 @@
 // Without the System UI companion (sim, goldens, consoles) the app boots a
 // static arrangement and just renders it — the unmodified-app base case.
 
-import { ref, shallowRef, triggerRef } from "vue";
+import { For, onCleanup } from "solid-js";
+import { createPadLayout } from "./layout.ts";
+import { createState } from "./reactivity.ts";
 import { Image, View } from "@pocketjs/framework/components";
 import { onFrame } from "@pocketjs/framework/lifecycle";
 import { virtualNow } from "@pocketjs/framework/clock";
@@ -138,7 +140,7 @@ import {
 const WELCOME = [
   "Welcome to Pocket Desktop.",
   "",
-  "The desktop shell is one PocketJS guest. Every Pocket app icon starts another isolated QuickJS guest in the same gpui process; each guest keeps its own globals, UI tree and fixed clock.",
+  "The desktop shell is one PocketJS guest. Every Pocket app icon starts another isolated QuickJS guest in the same PocketJS host process; each guest keeps its own globals, UI tree and fixed clock.",
   "",
   "Word wrap is on (Edit > Word Wrap) - these paragraphs are single logical lines; resize the window and they reflow live.",
   "",
@@ -188,23 +190,23 @@ function DesktopWindow(props: {
   const w = props.win;
   return (
     <View
-      class={props.theme.windowFrame(props.active, w.maximized.value)}
+      class={props.theme.windowFrame(props.active, w.maximized())}
       style={{
         insetL: 0,
         insetT: 0,
-        width: w.geo.value.w,
-        height: w.geo.value.h,
-        translateX: w.geo.value.x,
-        translateY: w.geo.value.y,
-        zIndex: w.z.value,
-        opacity: w.minimized.value ? 0 : 1,
+        width: w.geo().w,
+        height: w.geo().h,
+        translateX: w.geo().x,
+        translateY: w.geo().y,
+        zIndex: w.z(),
+        opacity: w.minimized() ? 0 : 1,
       }}
     >
       {props.theme.windowLayers(props.active).map((cls) => (
         <View class={cls} />
       ))}
       <View class={props.theme.caption(props.active)}>
-        {props.theme.captionLayers(props.active, w.maximized.value).map((cls) => (
+        {props.theme.captionLayers(props.active, w.maximized()).map((cls) => (
           <View class={cls} />
         ))}
         {props.theme.metrics.buttonSide === "left" ? (
@@ -213,12 +215,12 @@ function DesktopWindow(props: {
           <View class={props.theme.captionSpacer} />
         ) : null}
         <View class={props.theme.captionTitleBox}>
-          <Image class={props.theme.captionIcon} src={props.theme.icon(w.icon.value, 16)} />
+          <Image class={props.theme.captionIcon} src={props.theme.icon(w.icon(), 16)} />
           <UiText
             theme={props.theme}
             bold
             cls={props.theme.captionTitle(props.active)}
-            t={w.title.value}
+            t={w.title()}
           />
         </View>
         {props.theme.metrics.buttonSide === "right" ? (
@@ -232,11 +234,11 @@ function DesktopWindow(props: {
           <View class={props.theme.menuBar}>
             {(w.menus ?? []).map((menu, i) => (
               <View
-                class={props.theme.menuItem(w.openMenu.value === i)}
+                class={props.theme.menuItem(w.openMenu() === i)}
               >
                 <UiText
                   theme={props.theme}
-                  cls={props.theme.menuText(w.openMenu.value === i)}
+                  cls={props.theme.menuText(w.openMenu() === i)}
                   t={menu.label}
                 />
               </View>
@@ -248,6 +250,7 @@ function DesktopWindow(props: {
             <NotepadView
               data={padOf(w)}
               wrapW={padWrapW(w, props.theme.metrics.frame)}
+              viewH={w.geo().h}
               active={props.active}
               theme={props.theme}
             />
@@ -280,19 +283,19 @@ function DesktopWindow(props: {
 export default function App() {
   const svc = connectSvc();
 
-  const vp = shallowRef<{ w: number; h: number }>({ w: 800, h: 600 });
-  const wins = shallowRef<WinCtl[]>([]);
-  const focusId = ref(-1);
-  const iconSel = ref(-1);
-  const startOpen = ref(false);
-  const startHover = ref(-1);
-  const startFly = shallowRef<{ index: number; popup: Popup } | null>(null);
-  const flyHover = ref(-1);
-  const popup = shallowRef<{ popup: Popup; winId?: number } | null>(null);
-  const popupHover = ref(-1);
-  const clock = ref("--:--");
-  const themeId = ref<ThemeId>("classic");
-  const theme = () => themeById(themeId.value);
+  const vp = createState<{ w: number; h: number }>({ w: 800, h: 600 });
+  const wins = createState<WinCtl[]>([]);
+  const focusId = createState(-1);
+  const iconSel = createState(-1);
+  const startOpen = createState(false);
+  const startHover = createState(-1);
+  const startFly = createState<{ index: number; popup: Popup } | null>(null);
+  const flyHover = createState(-1);
+  const popup = createState<{ popup: Popup; winId?: number } | null>(null);
+  const popupHover = createState(-1);
+  const clock = createState("--:--");
+  const themeId = createState<ThemeId>("classic");
+  const theme = () => themeById(themeId());
   const metrics = () => theme().metrics;
   const uiSlot = () => theme().fontSlot("ui");
   /** Hit width of one menu title: its label in the UI face plus the theme's
@@ -313,61 +316,65 @@ export default function App() {
   let lastCaret = { x: -1, y: -1, h: 0 };
   let minesStart = 0;
 
-  const byId = (id: number) => wins.value.find((w) => w.id === id);
-  const focused = () => byId(focusId.value);
+  const byId = (id: number) => wins().find((w) => w.id === id);
+  const focused = () => byId(focusId());
 
   // ---- window management ----------------------------------------------------
 
   function applyZ() {
     stack.forEach((id, i) => {
       const w = byId(id);
-      if (w) w.z.value = i + 1;
+      if (w) w.z.set(i + 1);
     });
   }
 
   function raise(id: number) {
     stack = stack.filter((x) => x !== id).concat(id);
     applyZ();
-    focusId.value = id;
+    focusId.set(id);
     const w = byId(id);
-    if (w?.minimized.value) w.minimized.value = false;
+    if (w?.minimized()) w.minimized.set(false);
   }
 
   function addWin(w: WinCtl) {
-    wins.value = wins.value.concat(w);
+    wins.set(wins().concat(w));
     stack = stack.concat(w.id);
     applyZ();
-    focusId.value = w.id;
+    focusId.set(w.id);
   }
 
+  const layouts = new Map<number, ReturnType<typeof createPadLayout>>();
+  onCleanup(() => { for (const layout of layouts.values()) layout.dispose(); });
+
   function closeWin(id: number) {
-    wins.value = wins.value.filter((w) => w.id !== id);
+    layouts.get(id)?.dispose(); layouts.delete(id);
+    wins.set(wins().filter((w) => w.id !== id));
     stack = stack.filter((x) => x !== id);
     applyZ();
-    focusId.value = stack.length > 0 ? stack[stack.length - 1] : -1;
+    focusId.set(stack.length > 0 ? stack[stack.length - 1] : -1);
   }
 
   function minimize(id: number) {
     const w = byId(id);
-    if (w) w.minimized.value = true;
-    const next = stack.filter((x) => x !== id && !byId(x)?.minimized.value);
-    focusId.value = next.length > 0 ? next[next.length - 1] : -1;
+    if (w) w.minimized.set(true);
+    const next = stack.filter((x) => x !== id && !byId(x)?.minimized());
+    focusId.set(next.length > 0 ? next[next.length - 1] : -1);
   }
 
   function toggleMax(w: WinCtl) {
     if (!w.resizable) return;
-    if (w.maximized.value) {
-      w.maximized.value = false;
-      if (w.restoreGeo) w.geo.value = w.restoreGeo;
+    if (w.maximized()) {
+      w.maximized.set(false);
+      if (w.restoreGeo) w.geo.set(w.restoreGeo);
     } else {
-      w.restoreGeo = w.geo.value;
-      w.maximized.value = true;
-      w.geo.value = maximizedGeo(vp.value.w, vp.value.h, metrics());
+      w.restoreGeo = w.geo();
+      w.maximized.set(true);
+      w.geo.set(maximizedGeo(vp().w, vp().h, metrics()));
     }
   }
 
   function cycleWindows() {
-    const visible = stack.filter((id) => !byId(id)?.minimized.value);
+    const visible = stack.filter((id) => !byId(id)?.minimized());
     if (visible.length < 2) return;
     raise(visible[0]); // bottom-most visible comes up — repeated ⌘` cycles
   }
@@ -376,11 +383,11 @@ export default function App() {
    *  This is required for child CompositorSurfaces: their logical viewport
    *  must remain exact across a theme switch. */
   function setTheme(nextId: ThemeId) {
-    if (nextId === themeId.value) return;
+    if (nextId === themeId()) return;
     const previous = metrics();
     const next = themeById(nextId).metrics;
-    themeId.value = nextId;
-    for (const w of wins.value) {
+    themeId.set(nextId);
+    for (const w of wins()) {
       // Menu-bar hit widths were measured in the outgoing face.
       for (const menu of w.menus ?? []) menu.width = menuW(menu.label);
       const opts = chromeOpts(w);
@@ -394,16 +401,16 @@ export default function App() {
       w.minH = minimum.h;
       if (w.restoreGeo)
         w.restoreGeo = reframeGeo(w.restoreGeo, opts, previous, next);
-      if (w.maximized.value) {
-        w.geo.value = maximizedGeo(vp.value.w, vp.value.h, next);
+      if (w.maximized()) {
+        w.geo.set(maximizedGeo(vp().w, vp().h, next));
         continue;
       }
-      w.geo.value = clampMove(
-        reframeGeo(w.geo.value, opts, previous, next),
-        vp.value.w,
-        vp.value.h,
+      w.geo.set(clampMove(
+        reframeGeo(w.geo(), opts, previous, next),
+        vp().w,
+        vp().h,
         next,
-      );
+      ));
     }
     closeMenus();
   }
@@ -418,15 +425,15 @@ export default function App() {
   function copySel(): void {
     const p = focusedPad();
     if (!p) return;
-    const text = selectedText(p.d.doc.value);
+    const text = selectedText(p.d.doc());
     if (text !== "" && svc) svc.send({ t: "copy", text });
   }
 
   function cutSel(): void {
     const p = focusedPad();
-    if (!p || !hasSel(p.d.doc.value)) return;
+    if (!p || !hasSel(p.d.doc())) return;
     copySel();
-    applyEdit(p.w, "other", deleteSel(p.d.doc.value));
+    applyEdit(p.w, "other", deleteSel(p.d.doc()));
   }
 
   function pasteReq(): void {
@@ -436,35 +443,36 @@ export default function App() {
 
   function selectAllIn(w: WinCtl): void {
     const d = padOf(w);
-    d.doc.value = selectAll(d.doc.value);
+    d.doc.set(selectAll(d.doc()));
   }
 
   // ---- programs ---------------------------------------------------------------
 
   function openNotepad(title: string, content: string[]) {
-    const existing = wins.value.find(
-      (w) => w.kind === "notepad" && w.title.value === title,
+    const existing = wins().find(
+      (w) => w.kind === "notepad" && w.title() === title,
     );
     if (existing) return raise(existing.id);
     const data: PadData = {
       kind: "notepad",
-      doc: shallowRef<Doc>({
+      doc: createState<Doc>({
         lines: content.length > 0 ? content : [""],
         caret: { row: 0, col: 0 },
       }),
-      scroll: ref(0),
-      preedit: ref<{ s: string; c: number } | null>(null),
-      wrap: ref(true),
+      scroll: createState(0),
+      preedit: createState<{ s: string; c: number } | null>(null),
+      wrap: createState(true),
       hist: emptyHistory(),
+      layout: createState<PadData["layout"] extends () => infer T ? T : never>({ status: "pending", lines: [], rows: [], width: 0, slot: -1 }),
     };
     const w = createWin({
       kind: "notepad",
       title,
       icon: "notepad",
       geo: cascadePos(
-        wins.value.length,
-        vp.value.w,
-        vp.value.h,
+        wins().length,
+        vp().w,
+        vp().h,
         400,
         300,
         metrics(),
@@ -519,13 +527,13 @@ export default function App() {
             {
               label: "Cut",
               shortcut: "Cmd+X",
-              disabled: !hasSel(data.doc.value),
+              disabled: !hasSel(data.doc()),
               act: cutSel,
             },
             {
               label: "Copy",
               shortcut: "Cmd+C",
-              disabled: !hasSel(data.doc.value),
+              disabled: !hasSel(data.doc()),
               act: copySel,
             },
             { label: "Paste", shortcut: "Cmd+V", act: pasteReq },
@@ -547,9 +555,9 @@ export default function App() {
             { sep: true, label: "" },
             {
               label: "Word Wrap",
-              checked: data.wrap.value,
+              checked: data.wrap(),
               act: () => {
-                data.wrap.value = !data.wrap.value;
+                data.wrap.set(!data.wrap());
                 scrollCaretIntoView(w);
               },
             },
@@ -563,18 +571,19 @@ export default function App() {
       ],
       data,
     });
+    layouts.set(w.id, createPadLayout(w));
     addWin(w);
   }
 
   function openMines() {
-    const existing = wins.value.find((w) => w.kind === "mines");
+    const existing = wins().find((w) => w.kind === "mines");
     if (existing) return raise(existing.id);
     const data: MinesData = {
       kind: "mines",
-      board: shallowRef(newMines((virtualNow() * 1000) | 0)),
-      held: ref(-1),
-      smileyHeld: ref(false),
-      elapsed: ref(0),
+      board: createState(newMines((virtualNow() * 1000) | 0), false),
+      held: createState(-1),
+      smileyHeld: createState(false),
+      elapsed: createState(0),
     };
     const outer = reframeGeo(
       { x: 0, y: 0, w: MINES_GEO.w, h: MINES_GEO.h },
@@ -590,9 +599,9 @@ export default function App() {
       icon: "mines",
       geo: {
         ...cascadePos(
-          wins.value.length,
-          vp.value.w,
-          vp.value.h,
+          wins().length,
+          vp().w,
+          vp().h,
           outer.w,
           outer.h,
           metrics(),
@@ -634,7 +643,7 @@ export default function App() {
   }
 
   function openPocketApp(app: PocketAppSpec) {
-    const existing = wins.value.find(
+    const existing = wins().find(
       (w) => w.kind === "pocket" && pocketOf(w).app.package === app.package,
     );
     if (existing) return raise(existing.id);
@@ -653,9 +662,9 @@ export default function App() {
       title: `PocketJS: ${app.title}`,
       icon: "pocket",
       geo: cascadePos(
-        wins.value.length,
-        vp.value.w,
-        vp.value.h,
+        wins().length,
+        vp().w,
+        vp().h,
         outerW,
         outerH,
         m,
@@ -671,8 +680,8 @@ export default function App() {
 
   function minesNew(w: WinCtl) {
     const d = minesOf(w);
-    d.board.value = newMines((virtualNow() * 1000) | 0);
-    d.elapsed.value = 0;
+    d.board.set(newMines((virtualNow() * 1000) | 0));
+    d.elapsed.set(0);
     minesStart = 0;
   }
 
@@ -746,63 +755,63 @@ export default function App() {
   function navigate(w: WinCtl, id: PlaceId, push = true) {
     const d = folderOf(w);
     const place = placeOf(id);
-    if (push && d.place.value !== id) {
-      const h = d.hist.value;
-      d.hist.value = { items: [...h.items.slice(0, h.at + 1), id], at: h.at + 1 };
+    if (push && d.place() !== id) {
+      const h = d.hist();
+      d.hist.set({ items: [...h.items.slice(0, h.at + 1), id], at: h.at + 1 });
     }
-    d.place.value = id;
-    d.rows.value = placeRows(id, w);
-    d.selected.value = -1;
-    w.title.value = place.label;
-    w.icon.value = place.icon;
+    d.place.set(id);
+    d.rows.set(placeRows(id, w));
+    d.selected.set(-1);
+    w.title.set(place.label);
+    w.icon.set(place.icon);
   }
 
   /** The place a toolbar action leads to, or null when it does not apply. */
   function folderToolTarget(w: WinCtl, tool: FolderTool): PlaceId | null {
     const d = folderOf(w);
     if (!folderToolEnabled(d, tool)) return null;
-    const h = d.hist.value;
+    const h = d.hist();
     if (tool === "back") return h.items[h.at - 1];
     if (tool === "forward") return h.items[h.at + 1];
     // Up: (C:) and the Recycle Bin hang off My Computer, My Documents off (C:).
-    return d.place.value === "documents" ? "drivec" : "computer";
+    return d.place() === "documents" ? "drivec" : "computer";
   }
 
   function runFolderTool(w: WinCtl, tool: FolderTool) {
     const target = folderToolTarget(w, tool);
     if (target === null) return;
     const d = folderOf(w);
-    if (tool === "back") d.hist.value = { ...d.hist.value, at: d.hist.value.at - 1 };
+    if (tool === "back") d.hist.set({ ...d.hist(), at: d.hist().at - 1 });
     else if (tool === "forward")
-      d.hist.value = { ...d.hist.value, at: d.hist.value.at + 1 };
+      d.hist.set({ ...d.hist(), at: d.hist().at + 1 });
     navigate(w, target, tool === "up");
   }
 
   /** Raise the window already showing `id`, or open one there. */
   function openFolder(id: PlaceId) {
-    const existing = wins.value.find(
-      (w) => w.kind === "folder" && folderOf(w).place.value === id,
+    const existing = wins().find(
+      (w) => w.kind === "folder" && folderOf(w).place() === id,
     );
     if (existing) return raise(existing.id);
     const place = placeOf(id);
     const data: FolderData = {
       kind: "folder",
-      place: ref<PlaceId>(id),
-      rows: shallowRef<FolderRow[]>([]),
-      selected: ref(-1),
-      hist: shallowRef({ items: [id], at: 0 }),
-      toolHeld: ref<FolderTool | null>(null),
+      place: createState<PlaceId>(id),
+      rows: createState<FolderRow[]>([]),
+      selected: createState(-1),
+      hist: createState({ items: [id], at: 0 }),
+      toolHeld: createState<FolderTool | null>(null),
     };
     const w = createWin({
       kind: "folder",
       title: place.label,
       icon: place.icon,
-      geo: cascadePos(wins.value.length, vp.value.w, vp.value.h, 560, 320, metrics()),
+      geo: cascadePos(wins().length, vp().w, vp().h, 560, 320, metrics()),
       minW: 380,
       minH: 180,
       data,
     });
-    data.rows.value = placeRows(id, w);
+    data.rows.set(placeRows(id, w));
     addWin(w);
   }
 
@@ -811,9 +820,9 @@ export default function App() {
   const openRecycle = () => openFolder("recycle");
 
   function openAbout() {
-    const existing = wins.value.find((w) => w.kind === "about");
+    const existing = wins().find((w) => w.kind === "about");
     if (existing) return raise(existing.id);
-    const data: AboutData = { kind: "about", armed: ref<string | null>(null) };
+    const data: AboutData = { kind: "about", armed: createState<string | null>(null) };
     const w = createWin({
       kind: "about",
       title: "About Pocket Desktop",
@@ -827,12 +836,12 @@ export default function App() {
   }
 
   function openShutdown() {
-    const existing = wins.value.find((w) => w.kind === "shutdown");
+    const existing = wins().find((w) => w.kind === "shutdown");
     if (existing) return raise(existing.id);
     const data: ShutdownData = {
       kind: "shutdown",
-      choice: ref(0),
-      armed: ref<string | null>(null),
+      choice: createState(0),
+      armed: createState<string | null>(null),
     };
     const w = createWin({
       kind: "shutdown",
@@ -855,10 +864,10 @@ export default function App() {
     );
     const bar = metrics().screenBarH;
     return {
-      x: Math.max(0, Math.round((vp.value.w - outer.w) / 2)),
+      x: Math.max(0, Math.round((vp().w - outer.w) / 2)),
       y: Math.max(
         bar,
-        bar + Math.round((vp.value.h - bar - metrics().taskH - outer.h) / 2),
+        bar + Math.round((vp().h - bar - metrics().taskH - outer.h) / 2),
       ),
       w: outer.w,
       h: outer.h,
@@ -866,7 +875,7 @@ export default function App() {
   }
 
   function restartSession() {
-    for (const w of wins.value.slice()) closeWin(w.id);
+    for (const w of wins().slice()) closeWin(w.id);
     boot();
   }
 
@@ -874,7 +883,7 @@ export default function App() {
     const d = padOf(w);
     const t = new Date(epoch + (virtualNow() - epochAt) * 1000);
     const stamp = `${pad2(t.getHours())}:${pad2(t.getMinutes())} ${pad2(t.getMonth() + 1)}/${pad2(t.getDate())}/${t.getFullYear()}`;
-    applyEdit(w, "other", insertText(d.doc.value, stamp));
+    applyEdit(w, "other", insertText(d.doc(), stamp));
   }
 
   // ---- desktop icons + start menu ----------------------------------------------
@@ -903,9 +912,9 @@ export default function App() {
       x,
       y,
       icons.length,
-      desktopIconRows(vp.value.h, metrics()),
+      desktopIconRows(vp().h, metrics()),
       metrics(),
-      vp.value.w,
+      vp().w,
     );
   }
 
@@ -930,7 +939,7 @@ export default function App() {
   const themeItems = (): PopupItem[] =>
     THEMES.map((item) => ({
       label: item.label,
-      checked: item.id === themeId.value,
+      checked: item.id === themeId(),
       act: () => {
         setTheme(item.id);
       },
@@ -1048,7 +1057,7 @@ export default function App() {
       icon: "settings",
       sub: THEMES.map((item) => ({
         label: item.label,
-        checked: item.id === themeId.value,
+        checked: item.id === themeId(),
         act: () => {
           setTheme(item.id);
         },
@@ -1083,7 +1092,7 @@ export default function App() {
   };
 
   /** The panel rectangle both the render and hit testing read. */
-  const startGeo = () => startLayout(startItems(), vp.value.h, metrics());
+  const startGeo = () => startLayout(startItems(), vp().h, metrics());
 
   function startItemAt(x: number, y: number): number {
     return startRowAt(startGeo(), x, y);
@@ -1104,10 +1113,10 @@ export default function App() {
     }
     const h = popupHeight(items, metrics());
     return {
-      x: Math.min(x, vp.value.w - w - 2),
+      x: Math.min(x, vp().w - w - 2),
       y: Math.max(
         metrics().screenBarH,
-        Math.min(y, vp.value.h - metrics().taskH - h),
+        Math.min(y, vp().h - metrics().taskH - h),
       ),
       w: Math.max(w, 120),
       items,
@@ -1131,22 +1140,22 @@ export default function App() {
   }
 
   function closeMenus() {
-    startOpen.value = false;
-    startFly.value = null;
-    popup.value = null;
-    startHover.value = -1;
-    flyHover.value = -1;
-    popupHover.value = -1;
-    for (const w of wins.value) w.openMenu.value = -1;
+    startOpen.set(false);
+    startFly.set(null);
+    popup.set(null);
+    startHover.set(-1);
+    flyHover.set(-1);
+    popupHover.set(-1);
+    for (const w of wins()) w.openMenu.set(-1);
   }
 
   function toggleStart() {
-    popup.value = null;
-    startOpen.value = !startOpen.value;
-    if (!startOpen.value) {
-      startFly.value = null;
-      startHover.value = -1;
-      flyHover.value = -1;
+    popup.set(null);
+    startOpen.set(!startOpen());
+    if (!startOpen()) {
+      startFly.set(null);
+      startHover.set(-1);
+      flyHover.set(-1);
     }
   }
 
@@ -1182,7 +1191,7 @@ export default function App() {
         x: menuTitleX(index, screenMenuX0(), widths),
         y: metrics().screenBarH,
       };
-    const g = w.geo.value;
+    const g = w.geo();
     return {
       x: menuTitleX(index, g.x + metrics().frame, widths),
       y:
@@ -1198,22 +1207,22 @@ export default function App() {
   function menuTitleAt(w: WinCtl, x: number, y: number): number {
     if (!w.menus) return -1;
     if (metrics().screenBarH > 0) {
-      if (y >= metrics().screenBarH || focusId.value !== w.id) return -1;
+      if (y >= metrics().screenBarH || focusId() !== w.id) return -1;
       return menuIndexAt(x, screenMenuX0(), w.menus.map((m) => m.width));
     }
-    const r = hitRegion(w.geo.value, chromeOpts(w), x, y, metrics());
+    const r = hitRegion(w.geo(), chromeOpts(w), x, y, metrics());
     return r?.kind === "menu" ? r.index : -1;
   }
 
   function openWindowMenu(w: WinCtl, index: number) {
-    const open = w.openMenu.value === index ? -1 : index;
-    w.openMenu.value = open;
+    const open = w.openMenu() === index ? -1 : index;
+    w.openMenu.set(open);
     if (open >= 0 && w.menus) {
       const o = menuPopupOrigin(w, open);
-      popup.value = {
+      popup.set({
         popup: buildPopup(o.x, o.y, w.menus[open].items()),
         winId: w.id,
-      };
+      });
     }
   }
 
@@ -1223,7 +1232,7 @@ export default function App() {
     return {
       buttons: w.buttons,
       resizable: w.resizable,
-      maximized: w.maximized.value,
+      maximized: w.maximized(),
       menuWidths: (w.menus ?? []).map((m) => m.width),
     };
   }
@@ -1235,8 +1244,8 @@ export default function App() {
   ): { win: WinCtl; region: Region } | null {
     for (let i = stack.length - 1; i >= 0; i--) {
       const w = byId(stack[i]);
-      if (!w || w.minimized.value) continue;
-      const region = hitRegion(w.geo.value, chromeOpts(w), x, y, metrics());
+      if (!w || w.minimized()) continue;
+      const region = hitRegion(w.geo(), chromeOpts(w), x, y, metrics());
       if (region) return { win: w, region };
     }
     return null;
@@ -1270,10 +1279,11 @@ export default function App() {
    *  (visual row from y, column from x inside that segment). */
   function padCaretAt(w: WinCtl, cx: number, cy: number): Caret {
     const d = padOf(w);
-    const vrow = Math.floor((cy - 3 + d.scroll.value) / PAD_LINE_H);
+    if (padSegs(w, metrics().frame, uiSlot()).length === 0) return d.doc().caret;
+    const vrow = Math.floor((cy - 3 + d.scroll()) / PAD_LINE_H);
     return caretAtPoint(
       padSegs(w, metrics().frame, uiSlot()),
-      d.doc.value.lines,
+      d.doc().lines,
       vrow,
       cx - 3,
       padWidthFor(uiSlot()),
@@ -1284,8 +1294,8 @@ export default function App() {
 
   function onPrimaryDown(shift: boolean) {
     // Open menus swallow the click (classic: outside-click only dismisses).
-    if (startOpen.value) {
-      const fly = startFly.value;
+    if (startOpen()) {
+      const fly = startFly();
       if (fly && popupContains(fly.popup, mx, my)) {
         const i = popupItemAt(fly.popup, mx, my);
         if (i >= 0) {
@@ -1311,7 +1321,7 @@ export default function App() {
       closeMenus();
       return;
     }
-    const pop = popup.value;
+    const pop = popup();
     if (pop) {
       const i = popupItemAt(pop.popup, mx, my);
       closeMenus();
@@ -1323,8 +1333,8 @@ export default function App() {
     }
 
     // Launcher: the Start button, or the logo in the screen bar.
-    if (launcherHit(mx, my, vp.value.h, metrics())) {
-      startOpen.value = !startOpen.value;
+    if (launcherHit(mx, my, vp().h, metrics())) {
+      startOpen.set(!startOpen());
       return;
     }
 
@@ -1339,13 +1349,13 @@ export default function App() {
     }
 
     // Task strip.
-    if (my >= vp.value.h - metrics().taskH) {
+    if (my >= vp().h - metrics().taskH) {
       const entry = taskEntryAt(mx, my);
       if (entry !== -1) {
-        const id = wins.value[entry].id;
+        const id = wins()[entry].id;
         const w = byId(id);
         if (!w) return;
-        if (focusId.value === id && !w.minimized.value) minimize(id);
+        if (focusId() === id && !w.minimized()) minimize(id);
         else raise(id);
       }
       return;
@@ -1358,7 +1368,7 @@ export default function App() {
       raise(w.id);
       if (region.kind === "button") {
         drag = { type: "capbtn", id: w.id, btn: region.button };
-        w.pressedBtn.value = region.button;
+        w.pressedBtn.set(region.button);
         return;
       }
       if (region.kind === "caption") {
@@ -1366,8 +1376,8 @@ export default function App() {
           toggleMax(w);
           return;
         }
-        if (!w.maximized.value) {
-          drag = { type: "move", id: w.id, sx: mx, sy: my, orig: w.geo.value };
+        if (!w.maximized()) {
+          drag = { type: "move", id: w.id, sx: mx, sy: my, orig: w.geo() };
         }
         return;
       }
@@ -1378,7 +1388,7 @@ export default function App() {
           dir: region.dir,
           sx: mx,
           sy: my,
-          orig: w.geo.value,
+          orig: w.geo(),
         };
         return;
       }
@@ -1392,31 +1402,31 @@ export default function App() {
 
     // Desktop: select an icon (double-click opens), deactivate windows.
     const icon = iconAt(mx, my);
-    iconSel.value = icon;
-    focusId.value = -1;
+    iconSel.set(icon);
+    focusId.set(-1);
     if (icon >= 0 && isDblClick(`icon:${icon}`)) icons[icon].open();
   }
 
   function routeContentDown(w: WinCtl, cx: number, cy: number, shift: boolean) {
     if (w.kind === "notepad") {
       const d = padOf(w);
-      const doc = d.doc.value;
+      const doc = d.doc();
       const caret = padCaretAt(w, cx, cy);
       if (isDblClick(`pad:${w.id}`)) {
         // Double-click: select the word under the pointer.
         const r = wordRangeAt(doc.lines[caret.row], caret.col);
-        d.doc.value = {
+        d.doc.set({
           lines: doc.lines,
           caret: { row: caret.row, col: r.to },
           anchor: { row: caret.row, col: r.from },
-        };
+        });
         return;
       }
       // Click places the caret; shift-click extends; dragging selects.
       const anchor = shift
         ? (doc.anchor ?? doc.caret)
         : { row: caret.row, col: caret.col };
-      d.doc.value = { lines: doc.lines, caret, anchor };
+      d.doc.set({ lines: doc.lines, caret, anchor });
       drag = { type: "textsel", id: w.id };
       return;
     }
@@ -1425,20 +1435,20 @@ export default function App() {
       const hit = minesHit(cx, cy);
       if (hit?.type === "cell") {
         drag = { type: "minehold", id: w.id };
-        d.held.value = hit.i;
+        d.held.set(hit.i);
       } else if (hit?.type === "smiley") {
         drag = { type: "smiley", id: w.id };
-        d.smileyHeld.value = true;
+        d.smileyHeld.set(true);
       }
       return;
     }
     if (w.kind === "folder") {
       const d = folderOf(w);
-      const hit = folderHit(cx, cy, d.rows.value.length, PLACES.length, theme());
+      const hit = folderHit(cx, cy, d.rows().length, PLACES.length, theme());
       if (hit?.kind === "tool") {
         if (folderToolEnabled(d, hit.tool)) {
           drag = { type: "toolbtn", id: w.id, tool: hit.tool };
-          d.toolHeld.value = hit.tool;
+          d.toolHeld.set(hit.tool);
         }
         return;
       }
@@ -1447,12 +1457,12 @@ export default function App() {
         return;
       }
       const row = hit?.kind === "row" ? hit.i : -1;
-      d.selected.value = row;
-      if (row >= 0 && isDblClick(`row:${w.id}:${row}`)) d.rows.value[row].open?.();
+      d.selected.set(row);
+      if (row >= 0 && isDblClick(`row:${w.id}:${row}`)) d.rows()[row].open?.();
       return;
     }
     if (w.kind === "about") {
-      const g = w.geo.value;
+      const g = w.geo();
       const hit = aboutHit(
         g.w - metrics().frame * 2,
         g.h - metrics().frame - contentTop({ menuWidths: [] }, metrics()),
@@ -1461,12 +1471,12 @@ export default function App() {
       );
       if (hit === "ok") {
         drag = { type: "dialogbtn", id: w.id, tag: "ok" };
-        aboutOf(w).armed.value = "ok";
+        aboutOf(w).armed.set("ok");
       }
       return;
     }
     if (w.kind === "shutdown") {
-      const g = w.geo.value;
+      const g = w.geo();
       const d = shutdownOf(w);
       const hit = shutdownHit(
         g.w - metrics().frame * 2,
@@ -1474,17 +1484,17 @@ export default function App() {
         cx,
         cy,
       );
-      if (hit === "radio0") d.choice.value = 0;
-      else if (hit === "radio1") d.choice.value = 1;
+      if (hit === "radio0") d.choice.set(0);
+      else if (hit === "radio1") d.choice.set(1);
       else if (hit === "ok" || hit === "cancel") {
         drag = { type: "dialogbtn", id: w.id, tag: hit };
-        d.armed.value = hit;
+        d.armed.set(hit);
       }
     }
   }
 
   function onRightDown() {
-    if (startOpen.value || popup.value) {
+    if (startOpen() || popup()) {
       closeMenus();
       return;
     }
@@ -1496,16 +1506,16 @@ export default function App() {
         const d = minesOf(w);
         const cell = minesHit(region.cx, region.cy);
         if (cell?.type === "cell") {
-          d.board.value = toggleFlag(d.board.value, cell.i);
-          triggerRef(d.board);
+          d.board.set(toggleFlag(d.board(), cell.i));
+          d.board.set(d.board());
         }
         return;
       }
       if (region.kind === "content" && w.kind === "notepad") {
         raise(w.id);
         const d = padOf(w);
-        const has = hasSel(d.doc.value);
-        popup.value = {
+        const has = hasSel(d.doc());
+        popup.set({
           popup: buildPopup(mx, my, [
             { label: "Cut", shortcut: "Cmd+X", disabled: !has, act: cutSel },
             { label: "Copy", shortcut: "Cmd+C", disabled: !has, act: copySel },
@@ -1519,12 +1529,12 @@ export default function App() {
               },
             },
           ]),
-        };
+        });
         return;
       }
       if (region.kind === "caption") {
         raise(w.id);
-        popup.value = {
+        popup.set({
           popup: buildPopup(mx, my, [
             {
               label: "Minimize",
@@ -1534,7 +1544,7 @@ export default function App() {
               },
             },
             {
-              label: w.maximized.value ? "Restore" : "Maximize",
+              label: w.maximized() ? "Restore" : "Maximize",
               disabled: !w.resizable,
               act: () => {
                 toggleMax(w);
@@ -1550,14 +1560,14 @@ export default function App() {
             },
           ]),
           winId: w.id,
-        };
+        });
       }
       return;
     }
-    if (my >= metrics().screenBarH && my < vp.value.h - metrics().taskH) {
+    if (my >= metrics().screenBarH && my < vp().h - metrics().taskH) {
       const icon = iconAt(mx, my);
-      iconSel.value = icon;
-      popup.value = {
+      iconSel.set(icon);
+      popup.set({
         popup: buildPopup(mx, my, [
           { label: "Arrange Icons", act: () => {} },
           { label: "Refresh", act: () => {} },
@@ -1571,7 +1581,7 @@ export default function App() {
           { sep: true, label: "" },
           { label: "Properties", disabled: true },
         ]),
-      };
+      });
     }
   }
 
@@ -1579,50 +1589,50 @@ export default function App() {
     // Menu hover states. An open flyout takes the pointer first: it overlaps
     // the panel's other column, and the rows under it must neither steal the
     // hover nor close it.
-    if (startOpen.value) {
-      const fly = startFly.value;
+    if (startOpen()) {
+      const fly = startFly();
       if (fly && popupContains(fly.popup, mx, my)) {
-        flyHover.value = popupItemAt(fly.popup, mx, my);
+        flyHover.set(popupItemAt(fly.popup, mx, my));
       } else {
         const i = startItemAt(mx, my);
-        startHover.value = i;
+        startHover.set(i);
         if (i >= 0) {
           const item = startItems()[i];
           if (item.sub) {
-            if (startFly.value?.index !== i) {
+            if (startFly()?.index !== i) {
               const geo = startGeo();
               const row = geo.rows.find((r: StartRow) => r.index === i);
-              startFly.value = {
+              startFly.set({
                 index: i,
                 popup: buildPopup(
                   (row?.x ?? geo.x) + (row?.w ?? geo.w) - 3,
                   row?.y ?? geo.y,
                   item.sub,
                 ),
-              };
+              });
             }
-          } else if (startFly.value) {
-            startFly.value = null;
+          } else if (startFly()) {
+            startFly.set(null);
           }
         }
-        flyHover.value = -1;
+        flyHover.set(-1);
       }
     }
-    const pop = popup.value;
+    const pop = popup();
     if (pop) {
-      popupHover.value = popupItemAt(pop.popup, mx, my);
+      popupHover.set(popupItemAt(pop.popup, mx, my));
       // A menu-bar dropdown follows the hovered menu title (classic).
       if (pop.winId !== undefined) {
         const w = byId(pop.winId);
         if (w?.menus) {
           const i = menuTitleAt(w, mx, my);
-          if (i >= 0 && i !== w.openMenu.value) {
-            w.openMenu.value = i;
+          if (i >= 0 && i !== w.openMenu()) {
+            w.openMenu.set(i);
             const o = menuPopupOrigin(w, i);
-            popup.value = {
+            popup.set({
               popup: buildPopup(o.x, o.y, w.menus[i].items()),
               winId: w.id,
-            };
+            });
           }
         }
       }
@@ -1632,30 +1642,30 @@ export default function App() {
     if (drag?.type === "move") {
       const w = byId(drag.id);
       if (w) {
-        w.geo.value = clampMove(
+        w.geo.set(clampMove(
           {
             ...drag.orig,
             x: drag.orig.x + (mx - drag.sx),
             y: drag.orig.y + (my - drag.sy),
           },
-          vp.value.w,
-          vp.value.h,
+          vp().w,
+          vp().h,
           metrics(),
-        );
+        ));
       }
       return;
     }
     if (drag?.type === "resize") {
       const w = byId(drag.id);
       if (w) {
-        w.geo.value = resizeGeo(
+        w.geo.set(resizeGeo(
           drag.orig,
           drag.dir,
           mx - drag.sx,
           my - drag.sy,
           w.minW,
           w.minH,
-        );
+        ));
       }
       sendCursor(cursorForDir(drag.dir));
       return;
@@ -1664,21 +1674,21 @@ export default function App() {
       const w = byId(drag.id);
       if (w) {
         const d = padOf(w);
-        const g = w.geo.value;
+        const g = w.geo();
         const cx = mx - g.x - metrics().frame;
         const cy = my - g.y - contentTop(chromeOpts(w), metrics());
-        const doc = d.doc.value;
+        const doc = d.doc();
         const caret = padCaretAt(w, Math.max(0, cx), cy);
         if (
           caret.row !== doc.caret.row ||
           caret.col !== doc.caret.col ||
           (caret.end ?? false) !== (doc.caret.end ?? false)
         ) {
-          d.doc.value = {
+          d.doc.set({
             lines: doc.lines,
             caret,
             anchor: doc.anchor ?? doc.caret,
-          };
+          });
         }
       }
       sendCursor("text");
@@ -1688,14 +1698,13 @@ export default function App() {
       const w = byId(drag.id);
       if (w) {
         const r = hitRegion(
-          w.geo.value,
+          w.geo(),
           chromeOpts(w),
           mx,
           my,
           metrics(),
         );
-        w.pressedBtn.value =
-          r?.kind === "button" && r.button === drag.btn ? drag.btn : null;
+        w.pressedBtn.set(r?.kind === "button" && r.button === drag.btn ? drag.btn : null);
       }
       return;
     }
@@ -1704,28 +1713,27 @@ export default function App() {
       if (w) {
         const d = minesOf(w);
         const r = hitRegion(
-          w.geo.value,
+          w.geo(),
           chromeOpts(w),
           mx,
           my,
           metrics(),
         );
         const cell = r?.kind === "content" ? minesHit(r.cx, r.cy) : null;
-        d.held.value = cell?.type === "cell" ? cell.i : -1;
+        d.held.set(cell?.type === "cell" ? cell.i : -1);
       }
       return;
     }
     if (drag?.type === "toolbtn") {
       const w = byId(drag.id);
       if (w) {
-        const r = hitRegion(w.geo.value, chromeOpts(w), mx, my, metrics());
+        const r = hitRegion(w.geo(), chromeOpts(w), mx, my, metrics());
         const d = folderOf(w);
         const hit =
           r?.kind === "content"
-            ? folderHit(r.cx, r.cy, d.rows.value.length, PLACES.length, theme())
+            ? folderHit(r.cx, r.cy, d.rows().length, PLACES.length, theme())
             : null;
-        d.toolHeld.value =
-          hit?.kind === "tool" && hit.tool === drag.tool ? drag.tool : null;
+        d.toolHeld.set(hit?.kind === "tool" && hit.tool === drag.tool ? drag.tool : null);
       }
       return;
     }
@@ -1733,13 +1741,13 @@ export default function App() {
       const w = byId(drag.id);
       if (w) {
         const r = hitRegion(
-          w.geo.value,
+          w.geo(),
           chromeOpts(w),
           mx,
           my,
           metrics(),
         );
-        const g = w.geo.value;
+        const g = w.geo();
         const cw = g.w - metrics().frame * 2;
         const chh =
           g.h -
@@ -1754,7 +1762,7 @@ export default function App() {
         }
         const armed =
           w.kind === "about" ? aboutOf(w).armed : shutdownOf(w).armed;
-        armed.value = over === drag.tag ? drag.tag : null;
+        armed.set(over === drag.tag ? drag.tag : null);
       }
       return;
     }
@@ -1769,9 +1777,9 @@ export default function App() {
         k = "text";
     }
     const hoverCluster = hover?.region.kind === "button" ? hover.win.id : -1;
-    for (const w of wins.value) {
+    for (const w of wins()) {
       const on = w.id === hoverCluster;
-      if (w.captionHover.value !== on) w.captionHover.value = on;
+      if (w.captionHover() !== on) w.captionHover.set(on);
     }
     sendCursor(k);
   }
@@ -1782,25 +1790,25 @@ export default function App() {
     if (!d) return;
     if (d.type === "capbtn") {
       const w = byId(d.id);
-      if (w && w.pressedBtn.value === d.btn) {
-        w.pressedBtn.value = null;
+      if (w && w.pressedBtn() === d.btn) {
+        w.pressedBtn.set(null);
         if (d.btn === "close") closeWin(d.id);
         else if (d.btn === "min") minimize(d.id);
         else if (d.btn === "max") toggleMax(w);
-      } else if (w) w.pressedBtn.value = null;
+      } else if (w) w.pressedBtn.set(null);
       return;
     }
     if (d.type === "minehold") {
       const w = byId(d.id);
       if (w) {
         const md = minesOf(w);
-        const i = md.held.value;
-        md.held.value = -1;
+        const i = md.held();
+        md.held.set(-1);
         if (i >= 0) {
-          const was = md.board.value.phase;
-          md.board.value = reveal(md.board.value, i);
-          triggerRef(md.board);
-          if (was === "ready" && md.board.value.phase === "playing")
+          const was = md.board().phase;
+          md.board.set(reveal(md.board(), i));
+          md.board.set(md.board());
+          if (was === "ready" && md.board().phase === "playing")
             minesStart = virtualNow();
         }
       }
@@ -1809,9 +1817,9 @@ export default function App() {
     if (d.type === "smiley") {
       const w = byId(d.id);
       if (w) {
-        minesOf(w).smileyHeld.value = false;
+        minesOf(w).smileyHeld.set(false);
         const r = hitRegion(
-          w.geo.value,
+          w.geo(),
           chromeOpts(w),
           mx,
           my,
@@ -1826,8 +1834,8 @@ export default function App() {
       const w = byId(d.id);
       if (w) {
         const fd = folderOf(w);
-        const held = fd.toolHeld.value;
-        fd.toolHeld.value = null;
+        const held = fd.toolHeld();
+        fd.toolHeld.set(null);
         if (held === d.tool) runFolderTool(w, d.tool);
       }
       return;
@@ -1837,12 +1845,12 @@ export default function App() {
       if (w) {
         const armedRef =
           w.kind === "about" ? aboutOf(w).armed : shutdownOf(w).armed;
-        const armed = armedRef.value;
-        armedRef.value = null;
+        const armed = armedRef();
+        armedRef.set(null);
         if (armed === d.tag) {
           if (w.kind === "about") closeWin(w.id);
           else if (w.kind === "shutdown") {
-            const choice = shutdownOf(w).choice.value;
+            const choice = shutdownOf(w).choice();
             if (d.tag === "cancel") closeWin(w.id);
             else if (choice === 0) svc?.send({ t: "quit" });
             else restartSession();
@@ -1885,7 +1893,7 @@ export default function App() {
         return;
       }
       case "t":
-        if (shift) setTheme(nextThemeId(themeId.value));
+        if (shift) setTheme(nextThemeId(themeId()));
         return;
       case "a": {
         const p = focusedPad();
@@ -1908,7 +1916,7 @@ export default function App() {
       return;
     }
     if (k === "Escape") {
-      if (startOpen.value || popup.value) closeMenus();
+      if (startOpen() || popup()) closeMenus();
       return;
     }
     const w = focused();
@@ -1927,7 +1935,7 @@ export default function App() {
         return;
       }
       const d = padOf(w);
-      const doc = d.doc.value;
+      const doc = d.doc();
       switch (k) {
         case "Enter":
           applyEdit(w, "other", insertText(doc, "\n"));
@@ -1947,13 +1955,13 @@ export default function App() {
         case "Down":
         case "Home":
         case "End":
-          d.doc.value = applyMoveWrapped(
+          d.doc.set(applyMoveWrapped(
             doc,
             k as CaretMove,
             ev.sh ?? false,
             padSegs(w, metrics().frame, uiSlot()),
             padWidthFor(uiSlot()),
-          );
+          ));
           break;
         default:
           return;
@@ -1962,7 +1970,7 @@ export default function App() {
       return;
     }
     if (w.kind === "shutdown" && k === "Enter") {
-      const choice = shutdownOf(w).choice.value;
+      const choice = shutdownOf(w).choice();
       if (choice === 0) svc?.send({ t: "quit" });
       else restartSession();
       return;
@@ -1972,7 +1980,7 @@ export default function App() {
 
   function padViewH(w: WinCtl): number {
     return (
-      w.geo.value.h -
+      w.geo().h -
       metrics().frame -
       contentTop(chromeOpts(w), metrics()) -
       2
@@ -1983,15 +1991,15 @@ export default function App() {
     const d = padOf(w);
     const vrow = caretXY(
       padSegs(w, metrics().frame, uiSlot()),
-      d.doc.value.lines,
-      d.doc.value.caret,
+      d.doc().lines,
+      d.doc().caret,
       padWidthFor(uiSlot()),
     ).vrow;
     const y = vrow * PAD_LINE_H;
     const viewH = padViewH(w);
-    if (y - d.scroll.value < 0) d.scroll.value = Math.max(0, y);
-    else if (y - d.scroll.value > viewH - PAD_LINE_H)
-      d.scroll.value = y - viewH + PAD_LINE_H;
+    if (y - d.scroll() < 0) d.scroll.set(Math.max(0, y));
+    else if (y - d.scroll() > viewH - PAD_LINE_H)
+      d.scroll.set(y - viewH + PAD_LINE_H);
   }
 
   /** Apply an EDIT (never a plain caret/selection move) with an undo
@@ -1999,57 +2007,57 @@ export default function App() {
    *  nothing. */
   function applyEdit(w: WinCtl, kind: EditKind, next: Doc) {
     const d = padOf(w);
-    const prev = d.doc.value;
+    const prev = d.doc();
     if (docEquals(prev, next)) return;
     d.hist = record(d.hist, prev, next, kind);
-    d.doc.value = next;
+    d.doc.set(next);
     scrollCaretIntoView(w);
   }
 
   function undoIn(w: WinCtl) {
     const d = padOf(w);
-    const r = undoStep(d.hist, d.doc.value);
+    const r = undoStep(d.hist, d.doc());
     if (!r) return;
     d.hist = r.h;
-    d.doc.value = r.doc;
-    d.preedit.value = null;
+    d.doc.set(r.doc);
+    d.preedit.set(null);
     scrollCaretIntoView(w);
   }
 
   function redoIn(w: WinCtl) {
     const d = padOf(w);
-    const r = redoStep(d.hist, d.doc.value);
+    const r = redoStep(d.hist, d.doc());
     if (!r) return;
     d.hist = r.h;
-    d.doc.value = r.doc;
-    d.preedit.value = null;
+    d.doc.set(r.doc);
+    d.preedit.set(null);
     scrollCaretIntoView(w);
   }
 
   function typeInto(w: WinCtl, s: string, kind: EditKind = "type") {
-    applyEdit(w, kind, insertText(padOf(w).doc.value, s));
+    applyEdit(w, kind, insertText(padOf(w).doc(), s));
   }
 
   // ---- taskbar --------------------------------------------------------------------
 
   const taskEntries = (): TaskEntry[] =>
-    wins.value
+    wins()
       .filter((w) => w.kind !== "shutdown")
-      .map((w) => ({ id: w.id, title: w.title.value, icon: w.icon.value }));
+      .map((w) => ({ id: w.id, title: w.title(), icon: w.icon() }));
   const taskButtonW = () =>
-    taskLayout(vp.value.w, vp.value.h, taskEntries().length, metrics()).buttonW;
+    taskLayout(vp().w, vp().h, taskEntries().length, metrics()).buttonW;
 
   function taskEntryAt(x: number, y: number): number {
     const entries = taskEntries();
     const i = taskEntryIndexAt(
       x,
       y,
-      vp.value.w,
-      vp.value.h,
+      vp().w,
+      vp().h,
       entries.length,
       metrics(),
     );
-    return i < 0 ? -1 : wins.value.findIndex((win) => win.id === entries[i].id);
+    return i < 0 ? -1 : wins().findIndex((win) => win.id === entries[i].id);
   }
 
   // ---- frame pump -------------------------------------------------------------------
@@ -2057,19 +2065,19 @@ export default function App() {
   function handleEvent(ev: HostEvent) {
     switch (ev.t) {
       case "hello": {
-        vp.value = { w: ev.w ?? 800, h: ev.h ?? 600 };
+        vp.set({ w: ev.w ?? 800, h: ev.h ?? 600 });
         epoch = ev.epoch ?? 0;
         epochAt = virtualNow();
         break;
       }
       case "resize": {
-        const w = ev.w ?? vp.value.w;
-        const h = ev.h ?? vp.value.h;
-        vp.value = { w, h };
-        for (const win of wins.value) {
-          if (win.maximized.value)
-            win.geo.value = maximizedGeo(w, h, metrics());
-          else win.geo.value = clampMove(win.geo.value, w, h, metrics());
+        const w = ev.w ?? vp().w;
+        const h = ev.h ?? vp().h;
+        vp.set({ w, h });
+        for (const win of wins()) {
+          if (win.maximized())
+            win.geo.set(maximizedGeo(w, h, metrics()));
+          else win.geo.set(clampMove(win.geo(), w, h, metrics()));
         }
         break;
       }
@@ -2111,9 +2119,9 @@ export default function App() {
         if (w?.kind === "notepad") {
           const d = padOf(w);
           // Composition replaces the selection the moment it starts.
-          if (ev.s && hasSel(d.doc.value))
-            applyEdit(w, "other", deleteSel(d.doc.value));
-          d.preedit.value = ev.s ? { s: ev.s, c: ev.c ?? ev.s.length } : null;
+          if (ev.s && hasSel(d.doc()))
+            applyEdit(w, "other", deleteSel(d.doc()));
+          d.preedit.set(ev.s ? { s: ev.s, c: ev.c ?? ev.s.length } : null);
         }
         break;
       }
@@ -2124,10 +2132,10 @@ export default function App() {
           const contentH =
             padSegs(hover.win, metrics().frame, uiSlot()).length * PAD_LINE_H + 6;
           const maxY = Math.max(0, contentH - padViewH(hover.win));
-          d.scroll.value = Math.max(
+          d.scroll.set(Math.max(
             0,
-            Math.min(maxY, d.scroll.value + (ev.dy ?? 0)),
-          );
+            Math.min(maxY, d.scroll() + (ev.dy ?? 0)),
+          ));
         }
         break;
       }
@@ -2147,21 +2155,22 @@ export default function App() {
 
   onFrame(() => {
     if (svc) for (const ev of svc.poll()) handleEvent(ev);
+    for (const layout of layouts.values()) layout.step(metrics().frame, uiSlot());
 
     // Taskbar clock (minute precision, anchored at the hello epoch).
     if (epoch > 0) {
       const t = new Date(epoch + (virtualNow() - epochAt) * 1000);
       const s = `${pad2(t.getHours())}:${pad2(t.getMinutes())}`;
-      if (s !== clock.value) clock.value = s;
+      if (s !== clock()) clock.set(s);
     }
 
     // Minesweeper timer.
-    const mw = wins.value.find((w) => w.kind === "mines");
+    const mw = wins().find((w) => w.kind === "mines");
     if (mw) {
       const d = minesOf(mw);
-      if (d.board.value.phase === "playing" && minesStart > 0) {
+      if (d.board().phase === "playing" && minesStart > 0) {
         const e = Math.min(999, Math.floor(virtualNow() - minesStart));
-        if (e !== d.elapsed.value) d.elapsed.value = e;
+        if (e !== d.elapsed()) d.elapsed.set(e);
       }
     }
 
@@ -2169,8 +2178,8 @@ export default function App() {
     const fw = focused();
     if (svc && fw?.kind === "notepad") {
       const d = padOf(fw);
-      const g = fw.geo.value;
-      const doc = d.doc.value;
+      const g = fw.geo();
+      const doc = d.doc();
       const pos = caretXY(
         padSegs(fw, metrics().frame, uiSlot()),
         doc.lines,
@@ -2183,7 +2192,7 @@ export default function App() {
         contentTop(chromeOpts(fw), metrics()) +
         3 +
         pos.vrow * PAD_LINE_H -
-        d.scroll.value;
+        d.scroll();
       if (x !== lastCaret.x || y !== lastCaret.y) {
         lastCaret = { x, y, h: PAD_LINE_H };
         svc.send({ t: "caret", x, y, h: PAD_LINE_H });
@@ -2201,70 +2210,70 @@ export default function App() {
       ))}
       <DesktopIcons
         icons={icons}
-        selected={iconSel.value}
-        rows={desktopIconRows(vp.value.h, metrics())}
-        viewportW={vp.value.w}
+        selected={iconSel()}
+        rows={desktopIconRows(vp().h, metrics())}
+        viewportW={vp().w}
         theme={theme()}
       />
-      {wins.value.map((w) => (
+      <For each={wins()}>{(w) => (
         <DesktopWindow
           win={w}
-          active={focusId.value === w.id}
+          active={focusId() === w.id}
           theme={theme()}
         />
-      ))}
-      {startOpen.value && metrics().startHeaderH > 0 ? (
+      )}</For>
+      {startOpen() && metrics().startHeaderH > 0 ? (
         <StartPanel
           x={startGeo().x}
           y={startGeo().y}
           w={startGeo().w}
           h={startGeo().h}
           items={startItems()}
-          hover={startHover.value}
+          hover={startHover()}
           user="Pocket"
           theme={theme()}
         />
       ) : null}
-      {startOpen.value && metrics().startHeaderH === 0 ? (
+      {startOpen() && metrics().startHeaderH === 0 ? (
         <StartMenu
           x={startGeo().x}
           y={startGeo().y}
           w={startGeo().w}
           h={startGeo().h}
           items={startItems()}
-          hover={startHover.value}
+          hover={startHover()}
           theme={theme()}
         />
       ) : null}
-      {startOpen.value && startFly.value ? (
+      {startOpen() && startFly() ? (
         <PopupPanel
-          popup={startFly.value.popup}
-          hover={flyHover.value}
+          popup={startFly()!.popup}
+          hover={flyHover()}
           theme={theme()}
         />
       ) : null}
-      {popup.value ? (
+      {popup() ? (
         <PopupPanel
-          popup={popup.value.popup}
-          hover={popupHover.value}
+          popup={popup()!.popup}
+          hover={popupHover()}
           theme={theme()}
         />
       ) : null}
       {metrics().screenBarH > 0 ? (
         <ScreenBar
-          startOpen={startOpen.value}
+          startOpen={startOpen()}
           appName={appNameOf(focused())}
           menus={focused()?.menus ?? null}
-          openMenu={focused()?.openMenu.value ?? -1}
-          clock={clock.value}
+          openMenu={focused()?.openMenu() ?? -1}
+          clock={clock()}
           theme={theme()}
         />
       ) : null}
       <Taskbar
         entries={taskEntries()}
-        activeId={focusId.value}
-        startOpen={startOpen.value}
-        clock={clock.value}
+        activeId={focusId()}
+        startOpen={startOpen()}
+        clock={clock()}
         buttonW={taskButtonW()}
         theme={theme()}
       />
