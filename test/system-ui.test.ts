@@ -6,20 +6,29 @@
 import { describe, expect, test } from "bun:test";
 import {
   captionButtonXs,
+  captionSlots,
   clampMove,
   contentTop,
   cursorForDir,
   desktopIconAt,
   desktopIconPosition,
   desktopIconRows,
+  hasWindowMenuBar,
   hitRegion,
+  launcherHit,
   maximizedGeo,
+  popupHeight,
+  popupRowAt,
   reframeGeo,
   resizeGeo,
+  startLayout,
+  taskEntryIndexAt,
+  taskLayout,
   type ChromeOpts,
   type Geo,
 } from "../src/system-ui/wm.ts";
 import {
+  AQUA_THEME,
   CLASSIC_THEME,
   XP_THEME,
 } from "../src/system-ui/theme.ts";
@@ -913,5 +922,150 @@ describe("notepad selection", () => {
     expect(
       rowSelSpan({ lines: ["x"], caret: { row: 0, col: 0 } }, 0),
     ).toBeNull();
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Aqua: controls on the left, menus in a screen bar, a centered Dock
+// ---------------------------------------------------------------------------
+
+describe("aqua theme geometry", () => {
+  const aqua = AQUA_THEME.metrics;
+  const classic = CLASSIC_THEME.metrics;
+
+  test("the control cluster hugs the left edge in close/min/max order", () => {
+    const slots = captionSlots(400, ["min", "max", "close"], aqua);
+    expect(slots.map((s) => s.button)).toEqual(["close", "min", "max"]);
+    expect(slots[0].x).toBe(aqua.frame + aqua.buttonRight);
+    expect(slots[1].x).toBe(slots[0].x + aqua.buttonW + aqua.buttonGap);
+    expect(slots[2].x).toBe(slots[1].x + aqua.buttonW + aqua.buttonGap);
+    // captionButtonXs answers in the caller's order.
+    const xs = captionButtonXs(400, ["min", "max", "close"], aqua);
+    expect(xs).toEqual([slots[1].x, slots[2].x, slots[0].x]);
+  });
+
+  test("missing controls keep their ghost slot but never hit", () => {
+    const slots = captionSlots(300, ["close"], aqua);
+    expect(slots.map((s) => [s.button, s.present])).toEqual([
+      ["close", true],
+      ["min", false],
+      ["max", false],
+    ]);
+    const dialog: ChromeOpts = {
+      buttons: ["close"],
+      resizable: false,
+      maximized: false,
+      menuWidths: [],
+    };
+    const y = GEO.y + aqua.captionTop + aqua.buttonTop + 6;
+    expect(hitRegion(GEO, dialog, GEO.x + slots[0].x + 6, y, aqua)).toEqual({
+      kind: "button",
+      button: "close",
+    });
+    expect(hitRegion(GEO, dialog, GEO.x + slots[1].x + 6, y, aqua)).toEqual({
+      kind: "caption",
+    });
+  });
+
+  test("the Classic cluster stays right-aligned with no ghosts", () => {
+    expect(captionSlots(300, ["close"], classic)).toEqual([
+      { button: "close", x: 300 - 3 - 2 - 16, present: true },
+    ]);
+  });
+
+  test("a screen bar takes the menu bar out of the window", () => {
+    expect(hasWindowMenuBar(OPTS, classic)).toBe(true);
+    expect(hasWindowMenuBar(OPTS, aqua)).toBe(false);
+    expect(contentTop(OPTS, aqua)).toBe(
+      aqua.captionTop + aqua.titleH + aqua.titleGap,
+    );
+    // No menu region inside an Aqua window: the row under the caption is content.
+    const y = GEO.y + aqua.captionTop + aqua.titleH + aqua.titleGap + 5;
+    expect(hitRegion(GEO, OPTS, GEO.x + 3 + 10, y, aqua)).toEqual({
+      kind: "content",
+      cx: 12,
+      cy: 5,
+    });
+    // Reframing between the two keeps the client rectangle.
+    const reframed = reframeGeo(GEO, OPTS, classic, aqua);
+    expect(reframed.w - aqua.frame * 2).toBe(GEO.w - classic.frame * 2);
+    expect(reframed.h - aqua.frame - contentTop(OPTS, aqua)).toBe(
+      GEO.h - classic.frame - contentTop(OPTS, classic),
+    );
+    expect(reframeGeo(reframed, OPTS, aqua, classic)).toEqual(GEO);
+  });
+
+  test("windows, dialogs and icons live between the bar and the Dock", () => {
+    expect(maximizedGeo(800, 600, aqua)).toEqual({
+      x: 0,
+      y: 22,
+      w: 800,
+      h: 600 - 22 - 52,
+    });
+    expect(clampMove({ x: 10, y: 0, w: 200, h: 100 }, 800, 600, aqua).y).toBe(22);
+    const rows = desktopIconRows(600, aqua);
+    expect(rows).toBe(Math.floor((600 - 22 - 52 - 16) / 58));
+    // Icons hang from the right edge, first column flush right.
+    expect(desktopIconPosition(0, rows, aqua, 800)).toEqual({ x: 800 - 8 - 74, y: 30 });
+    expect(desktopIconPosition(rows, rows, aqua, 800).x).toBe(800 - 8 - 74 - 82);
+    expect(desktopIconAt(800 - 8 - 40, 40, 3, rows, aqua, 800)).toBe(0);
+    expect(desktopIconAt(40, 40, 3, rows, aqua, 800)).toBe(-1);
+    // Classic keeps its left-anchored grid untouched.
+    expect(desktopIconPosition(0, 9, classic, 800)).toEqual({ x: 8, y: 8 });
+  });
+
+  test("the Dock centers its tiles and the strip keeps its left flow", () => {
+    const dock = taskLayout(800, 600, 3, aqua);
+    expect(dock.buttonW).toBe(aqua.taskButtonMaxW);
+    const total = 3 * 44 + 2 * aqua.taskGap + aqua.taskPad * 2;
+    expect(dock.x0).toBe(Math.floor((800 - total) / 2) + aqua.taskPad);
+    expect(taskEntryIndexAt(dock.x0 + 44 + aqua.taskGap + 1, 570, 800, 600, 3, aqua)).toBe(1);
+    expect(taskEntryIndexAt(dock.x0 - 1, 570, 800, 600, 3, aqua)).toBe(-1);
+    expect(taskEntryIndexAt(dock.x0 + 1, 540, 800, 600, 3, aqua)).toBe(-1);
+
+    const strip = taskLayout(800, 600, 2, classic);
+    expect(strip.x0).toBe(
+      classic.taskLeft + classic.taskStartW + classic.taskGap * 2 + classic.taskDividerW,
+    );
+    expect(strip.buttonW).toBe(160);
+    expect(taskEntryIndexAt(strip.x0 + 5, 590, 800, 600, 2, classic)).toBe(0);
+  });
+
+  test("the launcher is the Start button or the screen-bar logo", () => {
+    expect(launcherHit(10, 590, 600, classic)).toBe(true);
+    expect(launcherHit(10, 5, 600, classic)).toBe(false);
+    expect(launcherHit(10, 5, 600, aqua)).toBe(true);
+    expect(launcherHit(10, 590, 600, aqua)).toBe(false);
+    expect(launcherHit(aqua.taskStartW + 1, 5, 600, aqua)).toBe(false);
+  });
+
+  test("the launcher panel hangs from the screen bar", () => {
+    const items = [{}, { sep: true }, {}];
+    const layout = startLayout(items, 600, aqua);
+    expect(layout.y).toBe(aqua.screenBarH);
+    expect(layout.rows.map((r) => r.y)).toEqual([
+      aqua.screenBarH + aqua.startPadY,
+      aqua.screenBarH + aqua.startPadY + aqua.startRowH + aqua.startSepH,
+    ]);
+    // Aqua's highlight spans edge to edge: rows are as wide as the panel.
+    expect(layout.rows[0].x).toBe(aqua.startX);
+    expect(layout.rows[0].w).toBe(aqua.startW);
+    const rising = startLayout(items, 600, classic);
+    expect(rising.y + rising.h).toBe(600 - classic.taskH);
+  });
+
+  test("popup rows follow the theme's row, separator and padding metrics", () => {
+    const items = [{}, { sep: true }, {}];
+    for (const m of [classic, XP_THEME.metrics, aqua]) {
+      expect(popupHeight(items, m)).toBe(m.popupPadY * 2 + m.popupRowH * 2 + m.popupSepH);
+      expect(popupRowAt(items, m.popupPadX + 1, m.popupPadY + 1, 120, m)).toBe(0);
+      expect(popupRowAt(items, m.popupPadX + 1, m.popupPadY + m.popupRowH + 1, 120, m)).toBe(-1);
+      expect(
+        popupRowAt(items, m.popupPadX + 1, m.popupPadY + m.popupRowH + m.popupSepH + 1, 120, m),
+      ).toBe(2);
+      if (m.popupPadX > 0) expect(popupRowAt(items, 0, m.popupPadY + 1, 120, m)).toBe(-1);
+      expect(popupRowAt(items, 119, m.popupPadY + 1, 120, m)).toBe(m.popupPadX > 0 ? -1 : 0);
+    }
   });
 });

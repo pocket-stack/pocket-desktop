@@ -144,6 +144,7 @@ const required = [
   "favicon.svg",
   "assets/classic-theme.png",
   "assets/xp-theme.png",
+  "assets/aqua-theme.png",
   "play/index.html",
   "play/runtime/pocketjs.wasm",
   "play/pocket-desktop.system.plan.json",

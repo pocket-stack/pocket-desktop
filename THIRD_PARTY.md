@@ -11,10 +11,10 @@ subject to Pocket Desktop's commercial-license terms.
 
 `vendor/pocketjs/assets/fonts/Inter-Regular.ttf` and `Inter-Bold.ttf` are Inter
 by Rasmus Andersson, licensed under the SIL Open Font License 1.1 (the received
-license is in `vendor/pocketjs/assets/fonts/LICENSE.txt`). The XP theme bakes
-them into the atlases `src/system-ui/fonts/inter-22*.bin` and `inter-23*.bin`;
-Windows XP's own Tahoma and Trebuchet MS are Microsoft's and are not
-redistributed here. Those baked atlases are derived Font Software and remain
+license is in `vendor/pocketjs/assets/fonts/LICENSE.txt`). The XP and Aqua
+themes bake them into the atlases `src/system-ui/fonts/inter-22*.bin` and
+`inter-23*.bin`; Windows XP's own Tahoma and Trebuchet MS and Mac OS X's Lucida
+Grande are Microsoft's and Apple's respectively and are not redistributed here. Those baked atlases are derived Font Software and remain
 under the OFL 1.1; they are not offered under Pocket Desktop's commercial
 license.
 

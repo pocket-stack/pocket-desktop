@@ -5,6 +5,7 @@
 
 import { ref, shallowRef, type Ref, type ShallowRef } from "vue";
 import type { CaptionButton, Geo } from "./wm.ts";
+import type { FolderTool, IconName } from "./theme.ts";
 import type { Doc, History } from "./notepad.ts";
 import type { Mines } from "./mines.ts";
 import type { PocketAppSpec } from "./pocket-apps.ts";
@@ -22,7 +23,8 @@ export interface MenuDef {
 
 export interface PopupItem {
   label: string;
-  icon?: string;
+  /** Semantic icon; the active theme resolves the artwork at paint time. */
+  icon?: IconName;
   shortcut?: string;
   disabled?: boolean;
   /** Toggle state — renders a checkmark in the icon slot. */
@@ -49,8 +51,10 @@ export interface Popup {
 export interface WinCtl {
   id: number;
   kind: WinKind;
-  title: string;
-  icon: string;
+  /** Reactive: a folder window renames itself as it navigates. */
+  title: Ref<string>;
+  /** Semantic icon; the active theme resolves the artwork at paint time. */
+  icon: Ref<IconName>;
   buttons: readonly CaptionButton[];
   resizable: boolean;
   minW: number;
@@ -63,6 +67,8 @@ export interface WinCtl {
   /** Geometry to restore on un-maximize. */
   restoreGeo: Geo | null;
   pressedBtn: Ref<CaptionButton | null>;
+  /** Pointer over the caption's control cluster (Aqua reveals glyphs). */
+  captionHover: Ref<boolean>;
   /** Open menu-bar index, -1 closed. */
   openMenu: Ref<number>;
   /** Program-specific state bag (PadData, MinesData, …). */
@@ -96,17 +102,39 @@ export interface MinesData {
 }
 
 export interface FolderRow {
-  icon: string;
+  icon: IconName;
   name: string;
   size: string;
   type: string;
   open?: () => void;
 }
 
+/** The places every file-manager window lists in its sidebar and navigates
+ *  among in place (the same window renames and refills itself). */
+export type PlaceId = "computer" | "drivec" | "documents" | "recycle";
+
+export interface Place {
+  id: PlaceId;
+  label: string;
+  icon: IconName;
+}
+
+export const PLACES: readonly Place[] = [
+  { id: "computer", label: "My Computer", icon: "computer" },
+  { id: "drivec", label: "(C:)", icon: "drive" },
+  { id: "documents", label: "My Documents", icon: "documents" },
+  { id: "recycle", label: "Recycle Bin", icon: "recycle" },
+];
+
 export interface FolderData {
   kind: "folder";
-  rows: FolderRow[];
+  place: Ref<PlaceId>;
+  rows: ShallowRef<FolderRow[]>;
   selected: Ref<number>;
+  /** Navigation history: visited places and the cursor into them. */
+  hist: ShallowRef<{ items: PlaceId[]; at: number }>;
+  /** Toolbar button held by the primary button, null none. */
+  toolHeld: Ref<FolderTool | null>;
 }
 
 export interface PocketData {
@@ -128,11 +156,11 @@ export interface ShutdownData {
 export interface TaskEntry {
   id: number;
   title: string;
-  icon: string;
+  icon: IconName;
 }
 
 export interface DeskIcon {
-  icon: string;
+  icon: IconName;
   label: string;
   open: () => void;
 }
@@ -142,7 +170,7 @@ let nextId = 1;
 export function createWin(spec: {
   kind: WinKind;
   title: string;
-  icon: string;
+  icon: IconName;
   geo: Geo;
   buttons?: readonly CaptionButton[];
   resizable?: boolean;
@@ -154,8 +182,8 @@ export function createWin(spec: {
   return {
     id: nextId++,
     kind: spec.kind,
-    title: spec.title,
-    icon: spec.icon,
+    title: ref(spec.title),
+    icon: ref<IconName>(spec.icon),
     buttons: spec.buttons ?? ["min", "max", "close"],
     resizable: spec.resizable ?? true,
     minW: spec.minW ?? 200,
@@ -167,6 +195,7 @@ export function createWin(spec: {
     maximized: ref(false),
     restoreGeo: null,
     pressedBtn: ref<CaptionButton | null>(null),
+    captionHover: ref(false),
     openMenu: ref(-1),
     data: spec.data,
   };
