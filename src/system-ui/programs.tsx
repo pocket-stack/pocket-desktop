@@ -14,7 +14,7 @@ import {
 } from "@pocketjs/framework/components";
 import { getOps } from "@pocketjs/framework/host";
 import { UiText } from "./chrome.tsx";
-import { FONT, type DesktopTheme } from "./theme.ts";
+import { FONT, type DesktopTheme, type FolderTool } from "./theme.ts";
 import {
   caretXY,
   segSelSpan,
@@ -23,14 +23,15 @@ import {
   type VSeg,
 } from "./notepad.ts";
 import { MINES_W, type Cell } from "./mines.ts";
-import type {
-  AboutData,
-  FolderData,
-  MinesData,
-  PadData,
-  PocketData,
-  ShutdownData,
-  WinCtl,
+import {
+  PLACES,
+  type AboutData,
+  type FolderData,
+  type MinesData,
+  type PadData,
+  type PocketData,
+  type ShutdownData,
+  type WinCtl,
 } from "./state.ts";
 
 export function measure(s: string, slot: number): number {
@@ -215,7 +216,7 @@ export function PocketAppView(props: {
   return (
     <View class="flex-1 relative overflow-hidden bg-[#000000]">
       <View class={props.theme.pocketLoading}>
-        <Image class="w-[32] h-[32] mb-[8]" src="icons/pocket-app.svg" />
+        <Image class="w-[32] h-[32] mb-[8]" src={props.theme.icon("pocket", 32)} />
         <UiText theme={props.theme} t={`Starting ${props.data.app.title}...`} />
         <UiText theme={props.theme} cls={props.theme.mutedText} t="Arrow keys + Z/X/A/S + Q/W" />
       </View>
@@ -346,7 +347,7 @@ function Digit(props: { ch: string }) {
 }
 
 /** Three-digit 7-seg counter (mine count / timer), clamped to -99..999. */
-function Counter(props: { value: number }) {
+function Counter(props: { value: number; theme: DesktopTheme }) {
   const text = computed(() => {
     const v = Math.max(-99, Math.min(999, Math.round(props.value)));
     return v < 0
@@ -354,7 +355,7 @@ function Counter(props: { value: number }) {
       : String(v).padStart(3, "0");
   });
   return (
-    <View class="flex-row bevel-[#808080,#ffffff] p-[1] gap-0">
+    <View class={props.theme.minesCounter}>
       <Digit ch={text.value[0]} />
       <Digit ch={text.value[1]} />
       <Digit ch={text.value[2]} />
@@ -362,8 +363,9 @@ function Counter(props: { value: number }) {
   );
 }
 
-/** One field cell: raised while hidden, flat when revealed (red on the bust
- *  mine), flag/mine art, colored adjacency digit. */
+/** One field cell: raised while hidden, flat when revealed (the bust mine
+ *  on red), flag/mine art, colored adjacency digit. The cell faces are the
+ *  theme's; the flag and mine are the game's own art on every theme. */
 function MinesCell(props: { data: MinesData; i: number; theme: DesktopTheme }) {
   const c = (): Cell => props.data.board.value.cells[props.i];
   const heldDown = () =>
@@ -373,24 +375,16 @@ function MinesCell(props: { data: MinesData; i: number; theme: DesktopTheme }) {
   return (
     <View class="w-[16] h-[16] relative">
       {c().state !== "revealed" ? (
-        <View
-          class={
-            heldDown()
-              ? "absolute inset-0 bg-[#c0c0c0] bevel-[#808080,#c0c0c0] flex-col justify-center items-center"
-              : "absolute inset-0 bg-[#c0c0c0] bevel-[#ffffff,#808080] bevel-w-[2] flex-col justify-center items-center"
-          }
-        >
+        <View class={props.theme.minesCell(heldDown() ? "held" : "hidden")}>
           {c().state === "flag" ? (
             <Image class="w-[8] h-[8]" src="icons/flag.svg" />
           ) : null}
         </View>
       ) : (
         <View
-          class={
-            props.data.board.value.bust === props.i
-              ? "absolute inset-0 bg-[#ff0000] bevel-[#808080,#ff0000] flex-col justify-center items-center"
-              : "absolute inset-0 bg-[#c0c0c0] bevel-[#808080,#c0c0c0] flex-col justify-center items-center"
-          }
+          class={props.theme.minesCell(
+            props.data.board.value.bust === props.i ? "bust" : "revealed",
+          )}
         >
           {c().mine ? (
             <Image class="w-[8] h-[8]" src="icons/mine.svg" />
@@ -428,21 +422,15 @@ export function MinesView(props: {
   };
   return (
     <View class={props.theme.minesRoot}>
-      <View class="h-[36] flex-row items-center justify-between px-[5] bevel-[#808080,#ffffff] bevel-w-[2]">
-        <Counter value={10 - d.board.value.flags} />
-        <View
-          class={
-            d.smileyHeld.value
-              ? "w-[26] h-[26] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#808080,#ffffff]"
-              : "w-[26] h-[26] flex-col justify-center items-center bg-[#c0c0c0] bevel-[#ffffff,#808080] bevel-w-[2]"
-          }
-        >
+      <View class={props.theme.minesPanel}>
+        <Counter value={10 - d.board.value.flags} theme={props.theme} />
+        <View class={props.theme.minesSmiley(d.smileyHeld.value)}>
           <Image class="w-[16] h-[16]" src={smiley()} />
         </View>
-        <Counter value={d.elapsed.value} />
+        <Counter value={d.elapsed.value} theme={props.theme} />
       </View>
       <View class="h-[6]" />
-      <View class="flex-col bevel-[#808080,#ffffff] bevel-w-[3] p-[3]">
+      <View class={props.theme.minesField}>
         {ROWS9.map((ry) => (
           <View class="flex-row">
             {ROWS9.map((rx) => (
@@ -456,27 +444,140 @@ export function MinesView(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Folder (Explorer details view)
+// Folder: a places sidebar beside the details list (sheru's file manager
+// shape). The sidebar's width, top inset and row height are theme metrics so
+// the hit test below and the paint agree under every skin.
 // ---------------------------------------------------------------------------
 
 export const FOLDER_HEADER_H = 17;
 export const FOLDER_ROW_H = 17;
 export const FOLDER_STATUS_H = 20;
 
-/** Row index for a content-local click inside the list, -1 none. */
+/** Row index for a click at list-local y, -1 none. */
 export function folderRowAt(cy: number, rowCount: number): number {
   const i = Math.floor((cy - 1 - FOLDER_HEADER_H) / FOLDER_ROW_H);
   return i >= 0 && i < rowCount ? i : -1;
 }
 
+export type FolderHit =
+  | { kind: "tool"; tool: FolderTool }
+  | { kind: "place"; i: number }
+  | { kind: "row"; i: number }
+  | null;
+
+/** Content-local hit: a toolbar button, a sidebar place, a list row, or
+ *  nothing. The toolbar spans the top `folderToolH`; the panes sit below. */
+export function folderHit(
+  cx: number,
+  cy: number,
+  rowCount: number,
+  placeCount: number,
+  theme: DesktopTheme,
+): FolderHit {
+  const m = theme.metrics;
+  if (cy < m.folderToolH) {
+    const top = Math.floor((m.folderToolH - m.folderToolBtnH) / 2);
+    if (cy < top || cy >= top + m.folderToolBtnH) return null;
+    for (let i = 0; i < theme.folderTools.length; i++) {
+      const x = m.folderToolPadX + i * (m.folderToolBtnW + m.folderToolGap);
+      if (cx >= x && cx < x + m.folderToolBtnW)
+        return { kind: "tool", tool: theme.folderTools[i] };
+    }
+    return null;
+  }
+  const py = cy - m.folderToolH;
+  if (cx < m.folderSideW) {
+    const i = Math.floor((py - m.folderSideTop) / m.folderSideRowH);
+    return i >= 0 && i < placeCount ? { kind: "place", i } : null;
+  }
+  if (cx < m.folderSideW + m.folderSideGap) return null;
+  const i = folderRowAt(py, rowCount);
+  return i >= 0 ? { kind: "row", i } : null;
+}
+
+/** Whether a toolbar action applies to the window's current history. */
+export function folderToolEnabled(d: FolderData, tool: FolderTool): boolean {
+  const h = d.hist.value;
+  if (tool === "back") return h.at > 0;
+  if (tool === "forward") return h.at < h.items.length - 1;
+  return d.place.value !== "computer";
+}
+
 export function FolderView(props: {
   data: FolderData;
   resizable: boolean;
+  active: boolean;
   theme: DesktopTheme;
 }) {
   const d = props.data;
+  const current = (i: number) => PLACES[i].id === d.place.value;
+  const place = () => PLACES.find((p) => p.id === d.place.value) ?? PLACES[0];
   return (
     <View class="flex-1 flex-col">
+      <View class={props.theme.folderToolbar}>
+        {props.theme.folderToolLayers.map((cls) => (
+          <View class={cls} />
+        ))}
+        {props.theme.folderTools.map((tool) => (
+          <View
+            class={props.theme.folderToolButton(
+              folderToolEnabled(d, tool),
+              d.toolHeld.value === tool,
+            )}
+          >
+            <Image class="w-[16] h-[16]" src={props.theme.icon(tool, 16)} />
+          </View>
+        ))}
+        {props.theme.folderAddressLabel !== "" ? (
+          <View class="ml-[6] mr-[2]">
+            <UiText theme={props.theme} t={props.theme.folderAddressLabel} />
+          </View>
+        ) : null}
+        <View class={props.theme.folderAddress}>
+          <Image class="w-[16] h-[16]" src={props.theme.icon(place().icon, 16)} />
+          <UiText
+            theme={props.theme}
+            cls={props.theme.folderAddressText}
+            t={place().label}
+          />
+        </View>
+        {props.theme.folderSearch !== "" ? (
+          <View class={props.theme.folderSearch}>
+            <Image class="w-[16] h-[16]" src={props.theme.icon("find", 16)} />
+            <UiText theme={props.theme} cls={props.theme.folderSearchText} t="Search" />
+          </View>
+        ) : null}
+      </View>
+      <View class="flex-1 flex-row">
+      <View class={props.theme.folderSidebar}>
+        {props.theme.folderSideLayers.map((cls) => (
+          <View class={cls} />
+        ))}
+        {props.theme.folderSideHeadingLabel !== "" ? (
+          <View class={props.theme.folderSideHeading}>
+            <UiText
+              theme={props.theme}
+              bold
+              cls={props.theme.folderSideHeadingText}
+              t={props.theme.folderSideHeadingLabel}
+            />
+          </View>
+        ) : null}
+        <View class={props.theme.folderSidePanel}>
+          {PLACES.map((place, i) => (
+            <View class={props.theme.folderSideItem(current(i), props.active)}>
+              <Image class="w-[16] h-[16]" src={props.theme.icon(place.icon, 16)} />
+              <View class="flex-1 flex-row overflow-hidden">
+                <UiText
+                  theme={props.theme}
+                  cls={props.theme.folderSideText(current(i), props.active)}
+                  t={place.label}
+                />
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
       <View class={props.theme.folderWell}>
         <View class="h-[17] flex-row shrink-0">
           <View class={props.theme.folderHeader("name")}>
@@ -489,11 +590,11 @@ export function FolderView(props: {
             <UiText theme={props.theme} t="Type" />
           </View>
         </View>
-        {d.rows.map((row, i) => (
+        {d.rows.value.map((row, i) => (
           <View
-            class={props.theme.folderRow(d.selected.value === i)}
+            class={props.theme.folderRow(d.selected.value === i, i % 2 === 1)}
           >
-            <Image class="w-[16] h-[16] mr-[4]" src={row.icon} />
+            <Image class="w-[16] h-[16] mr-[4]" src={props.theme.icon(row.icon, 16)} />
             <View class="flex-1 flex-row overflow-hidden">
               <UiText
                 theme={props.theme}
@@ -505,7 +606,7 @@ export function FolderView(props: {
                 t={row.name}
               />
             </View>
-            <View class="w-[60] flex-row justify-end">
+            <View class="w-[64] flex-row justify-end pr-[6]">
               <UiText
                 theme={props.theme}
                 cls={
@@ -516,7 +617,7 @@ export function FolderView(props: {
                 t={row.size}
               />
             </View>
-            <View class="w-[100] flex-row pl-[6]">
+            <View class="w-[104] flex-row pl-[6]">
               <UiText
                 theme={props.theme}
                 cls={
@@ -529,18 +630,19 @@ export function FolderView(props: {
             </View>
           </View>
         ))}
-        {d.rows.length === 0 ? (
+        {d.rows.value.length === 0 ? (
           <View class="flex-1 flex-col justify-center items-center">
             <UiText theme={props.theme} cls={props.theme.mutedText} t="(empty)" />
           </View>
         ) : null}
       </View>
+      </View>
       <View class="h-[20] flex-row items-end gap-[2] pt-[2]">
         <View class={props.theme.statusWell}>
-          <UiText theme={props.theme} t={`${d.rows.length} object(s)`} />
+          <UiText theme={props.theme} t={`${d.rows.value.length} object(s)`} />
         </View>
         {props.resizable ? (
-          <Image class="w-[16] h-[16]" src="icons/grip.svg" />
+          <Image class="w-[16] h-[16]" src={props.theme.icon("grip", 16)} />
         ) : null}
       </View>
     </View>
@@ -551,19 +653,27 @@ export function FolderView(props: {
 // About + Shut Down dialogs
 // ---------------------------------------------------------------------------
 
-export const ABOUT_GEO = { w: 340, h: 216 } as const;
+// Classic outer sizes; other themes reframe them around the same client
+// rectangle. About leaves room for the taller antialiased faces' line boxes.
+export const ABOUT_GEO = { w: 340, h: 260 } as const;
 export const SHUTDOWN_GEO = { w: 300, h: 176 } as const;
 
-/** Dialog push button; armed = pressed face + 1px content nudge. */
+/** Dialog push button; armed = pressed face + 1px content nudge. `primary`
+ *  marks the default button (Enter) — Aqua paints it as the blue gel. */
 function DialogButton(props: {
   label: string;
   armed: boolean;
+  primary?: boolean;
   theme: DesktopTheme;
 }) {
   return (
-    <View class={props.theme.dialogButton(props.armed)}>
+    <View class={props.theme.dialogButton(props.armed, props.primary ?? false)}>
       <View class={props.armed ? "ml-[1] mt-[1]" : ""}>
-        <UiText theme={props.theme} t={props.label} />
+        <UiText
+          theme={props.theme}
+          cls={props.theme.dialogButtonText(props.primary ?? false)}
+          t={props.label}
+        />
       </View>
     </View>
   );
@@ -588,12 +698,12 @@ export function AboutView(props: {
   return (
     <View class="flex-1 flex-col p-[10] gap-[8]">
       <View class="flex-row items-center gap-[10]">
-        <Image class="w-[32] h-[32]" src="icons/computer.svg" />
+        <Image class="w-[32] h-[32]" src={props.theme.icon("computer", 32)} />
         <UiText theme={props.theme} xl t="Pocket Desktop" />
       </View>
       <View class="h-[2] flex-col">
-        <View class="h-[1] bg-[#808080]" />
-        <View class="h-[1] bg-[#ffffff]" />
+        <View class={props.theme.popupSeparatorDark} />
+        <View class={props.theme.popupSeparatorLight} />
       </View>
       <UiText theme={props.theme} t="A desktop compositor demo on the gpui backend." />
       <UiText theme={props.theme} t="Vue Vapor JSX over the same DrawList the" />
@@ -609,6 +719,7 @@ export function AboutView(props: {
         <DialogButton
           label="OK"
           armed={props.data.armed.value === "ok"}
+          primary
           theme={props.theme}
         />
       </View>
@@ -658,7 +769,7 @@ export function ShutdownView(props: {
   return (
     <View class="flex-1 flex-col p-[10]">
       <View class="flex-row items-start gap-[10]">
-        <Image class="w-[32] h-[32]" src="icons/shutdown.svg" />
+        <Image class="w-[32] h-[32]" src={props.theme.icon("shutdown", 32)} />
         <View class="flex-col gap-[2]">
           <UiText theme={props.theme} t="What do you want the computer to do?" />
         </View>
@@ -673,6 +784,7 @@ export function ShutdownView(props: {
         <DialogButton
           label="OK"
           armed={props.data.armed.value === "ok"}
+          primary
           theme={props.theme}
         />
         <DialogButton

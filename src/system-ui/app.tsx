@@ -33,11 +33,18 @@ import {
   desktopIconAt,
   desktopIconRows,
   hitRegion,
+  launcherHit,
   maximizedGeo,
+  menuIndexAt,
+  menuTitleX,
+  popupHeight,
+  popupRowAt,
   reframeGeo,
   resizeGeo,
   startLayout,
   startRowAt,
+  taskEntryIndexAt,
+  taskLayout,
   type CaptionButton,
   type Dir,
   type Geo,
@@ -46,12 +53,15 @@ import {
 } from "./wm.ts";
 import {
   createWin,
+  PLACES,
   type AboutData,
   type DeskIcon,
   type FolderData,
   type FolderRow,
   type MinesData,
   type PadData,
+  type Place,
+  type PlaceId,
   type PocketData,
   type Popup,
   type PopupItem,
@@ -64,7 +74,8 @@ import {
   AboutView,
   aboutHit,
   FolderView,
-  folderRowAt,
+  folderHit,
+  folderToolEnabled,
   measure,
   MINES_GEO,
   MinesView,
@@ -102,23 +113,22 @@ import {
   type EditKind,
 } from "./notepad.ts";
 import { newMines, reveal, toggleFlag } from "./mines.ts";
-import {
-  POCKET_APPS,
-  POCKET_ICON,
-  POCKET_ICON_SMALL,
-  type PocketAppSpec,
-} from "./pocket-apps.ts";
+import { POCKET_APPS, type PocketAppSpec } from "./pocket-apps.ts";
 import {
   CLASSIC_THEME,
+  nextThemeId,
   THEMES,
   themeById,
   type DesktopTheme,
+  type FolderTool,
+  type IconName,
   type ThemeId,
 } from "./theme.ts";
 import {
   CaptionButtons,
   DesktopIcons,
   PopupPanel,
+  ScreenBar,
   StartMenu,
   StartPanel,
   UiText,
@@ -152,6 +162,7 @@ type Drag =
   | { type: "minehold"; id: number }
   | { type: "smiley"; id: number }
   | { type: "dialogbtn"; id: number; tag: string }
+  | { type: "toolbtn"; id: number; tool: FolderTool }
   | null;
 
 // Program data bags (typed views of w.data for render + routing).
@@ -165,7 +176,10 @@ const shutdownOf = (w: WinCtl) => w.data as ShutdownData;
 /** One window: raised frame, caption gradient, controls, menu bar, and the
  *  program content dispatched on the (static) window kind. Position/size
  *  ride the style prop — translate moves are paint-only, and zIndex raises
- *  without reordering siblings (a reorder would rebuild the layout tree). */
+ *  without reordering siblings (a reorder would rebuild the layout tree).
+ *  The control cluster sits on the theme's `buttonSide`; the opposite side
+ *  gets the theme's balancing spacer (Aqua centers its title). A theme with
+ *  a screen bar takes the menu bar out of the window. */
 function DesktopWindow(props: {
   win: WinCtl;
   active: boolean;
@@ -193,19 +207,28 @@ function DesktopWindow(props: {
         {props.theme.captionLayers(props.active, w.maximized.value).map((cls) => (
           <View class={cls} />
         ))}
-        <Image class={props.theme.captionIcon} src={w.icon} />
-        <View class="flex-1 flex-row overflow-hidden">
+        {props.theme.metrics.buttonSide === "left" ? (
+          <CaptionButtons win={w} active={props.active} theme={props.theme} />
+        ) : props.theme.captionSpacer !== "" ? (
+          <View class={props.theme.captionSpacer} />
+        ) : null}
+        <View class={props.theme.captionTitleBox}>
+          <Image class={props.theme.captionIcon} src={props.theme.icon(w.icon.value, 16)} />
           <UiText
             theme={props.theme}
             bold
             cls={props.theme.captionTitle(props.active)}
-            t={w.title}
+            t={w.title.value}
           />
         </View>
-        <CaptionButtons win={w} active={props.active} theme={props.theme} />
+        {props.theme.metrics.buttonSide === "right" ? (
+          <CaptionButtons win={w} active={props.active} theme={props.theme} />
+        ) : props.theme.captionSpacer !== "" ? (
+          <View class={props.theme.captionSpacer} />
+        ) : null}
       </View>
       <View class={props.theme.windowInner}>
-        {w.menus !== null ? (
+        {w.menus !== null && props.theme.metrics.screenBarH === 0 ? (
           <View class={props.theme.menuBar}>
             {(w.menus ?? []).map((menu, i) => (
               <View
@@ -234,6 +257,7 @@ function DesktopWindow(props: {
             <FolderView
               data={folderOf(w)}
               resizable={w.resizable}
+              active={props.active}
               theme={props.theme}
             />
           ) : w.kind === "pocket" ? (
@@ -271,6 +295,10 @@ export default function App() {
   const theme = () => themeById(themeId.value);
   const metrics = () => theme().metrics;
   const uiSlot = () => theme().fontSlot("ui");
+  /** Hit width of one menu title: its label in the UI face plus the theme's
+   *  title padding on both sides (mirrors menuItem's px-[…]). */
+  const menuW = (label: string) =>
+    measure(label, uiSlot()) + metrics().menuPadX * 2;
 
   // Non-reactive input state (nothing renders from these directly).
   let stack: number[] = []; // window ids, bottom → top
@@ -354,8 +382,7 @@ export default function App() {
     themeId.value = nextId;
     for (const w of wins.value) {
       // Menu-bar hit widths were measured in the outgoing face.
-      for (const menu of w.menus ?? [])
-        menu.width = measure(menu.label, uiSlot()) + 12;
+      for (const menu of w.menus ?? []) menu.width = menuW(menu.label);
       const opts = chromeOpts(w);
       const minimum = reframeGeo(
         { x: 0, y: 0, w: w.minW, h: w.minH },
@@ -416,7 +443,7 @@ export default function App() {
 
   function openNotepad(title: string, content: string[]) {
     const existing = wins.value.find(
-      (w) => w.kind === "notepad" && w.title === title,
+      (w) => w.kind === "notepad" && w.title.value === title,
     );
     if (existing) return raise(existing.id);
     const data: PadData = {
@@ -433,7 +460,7 @@ export default function App() {
     const w = createWin({
       kind: "notepad",
       title,
-      icon: "icons/notepad-16.svg",
+      icon: "notepad",
       geo: cascadePos(
         wins.value.length,
         vp.value.w,
@@ -447,7 +474,7 @@ export default function App() {
       menus: [
         {
           label: "File",
-          width: measure("File", uiSlot()) + 12,
+          width: menuW("File"),
           items: () => [
             {
               label: "New",
@@ -470,7 +497,7 @@ export default function App() {
         },
         {
           label: "Edit",
-          width: measure("Edit", uiSlot()) + 12,
+          width: menuW("Edit"),
           items: () => [
             {
               label: "Undo",
@@ -530,7 +557,7 @@ export default function App() {
         },
         {
           label: "Help",
-          width: measure("Help", uiSlot()) + 12,
+          width: menuW("Help"),
           items: () => [{ label: "About Pocket Desktop", act: openAbout }],
         },
       ],
@@ -552,10 +579,7 @@ export default function App() {
     const outer = reframeGeo(
       { x: 0, y: 0, w: MINES_GEO.w, h: MINES_GEO.h },
       {
-        menuWidths: [
-          measure("Game", uiSlot()) + 12,
-          measure("Help", uiSlot()) + 12,
-        ],
+        menuWidths: [menuW("Game"), menuW("Help")],
       },
       CLASSIC_THEME.metrics,
       metrics(),
@@ -563,7 +587,7 @@ export default function App() {
     const w = createWin({
       kind: "mines",
       title: "Minesweeper",
-      icon: "icons/mines-16.svg",
+      icon: "mines",
       geo: {
         ...cascadePos(
           wins.value.length,
@@ -579,7 +603,7 @@ export default function App() {
       menus: [
         {
           label: "Game",
-          width: measure("Game", uiSlot()) + 12,
+          width: menuW("Game"),
           items: () => [
             {
               label: "New",
@@ -600,7 +624,7 @@ export default function App() {
         },
         {
           label: "Help",
-          width: measure("Help", uiSlot()) + 12,
+          width: menuW("Help"),
           items: () => [{ label: "About Pocket Desktop", act: openAbout }],
         },
       ],
@@ -627,7 +651,7 @@ export default function App() {
     const w = createWin({
       kind: "pocket",
       title: `PocketJS: ${app.title}`,
-      icon: POCKET_ICON_SMALL,
+      icon: "pocket",
       geo: cascadePos(
         wins.value.length,
         vp.value.w,
@@ -652,124 +676,139 @@ export default function App() {
     minesStart = 0;
   }
 
-  function openFolder(
-    title: string,
-    icon: string,
-    rows: FolderRow[],
-    geoW = 420,
-    geoH = 280,
-  ) {
+  /** Rows of a place, with row actions bound to the window that shows
+   *  them: drives and folders navigate in place, documents open Notepad. */
+  function placeRows(id: PlaceId, w: WinCtl): FolderRow[] {
+    switch (id) {
+      case "computer":
+        return [
+          {
+            icon: "drive",
+            name: "(C:)",
+            size: "",
+            type: "Local Disk",
+            open: () => {
+              navigate(w, "drivec");
+            },
+          },
+          { icon: "cdrom", name: "(D:)", size: "", type: "CD-ROM Disc" },
+          { icon: "folder", name: "Control Panel", size: "", type: "System Folder" },
+          { icon: "folder", name: "Printers", size: "", type: "System Folder" },
+        ];
+      case "drivec":
+        return [
+          { icon: "folder", name: "Program Files", size: "", type: "File Folder" },
+          { icon: "folder", name: "Windows", size: "", type: "File Folder" },
+          {
+            icon: "folder",
+            name: "My Documents",
+            size: "",
+            type: "File Folder",
+            open: () => {
+              navigate(w, "documents");
+            },
+          },
+          { icon: "file", name: "AUTOEXEC.BAT", size: "1 KB", type: "MS-DOS Batch File" },
+          { icon: "file", name: "CONFIG.SYS", size: "1 KB", type: "System file" },
+          {
+            icon: "notepad",
+            name: "README.TXT",
+            size: "2 KB",
+            type: "Text Document",
+            open: () => {
+              openNotepad("README.TXT - Notepad", WELCOME);
+            },
+          },
+        ];
+      case "documents":
+        return [
+          {
+            icon: "notepad",
+            name: "welcome.txt",
+            size: "1 KB",
+            type: "Text Document",
+            open: () => {
+              openNotepad("welcome.txt - Notepad", WELCOME);
+            },
+          },
+        ];
+      case "recycle":
+        return [];
+    }
+  }
+
+  function placeOf(id: PlaceId): Place {
+    return PLACES.find((p) => p.id === id) ?? PLACES[0];
+  }
+
+  /** Point a folder window at another place: title, icon, rows, selection.
+   *  Pushes onto the history unless the move IS a history step. */
+  function navigate(w: WinCtl, id: PlaceId, push = true) {
+    const d = folderOf(w);
+    const place = placeOf(id);
+    if (push && d.place.value !== id) {
+      const h = d.hist.value;
+      d.hist.value = { items: [...h.items.slice(0, h.at + 1), id], at: h.at + 1 };
+    }
+    d.place.value = id;
+    d.rows.value = placeRows(id, w);
+    d.selected.value = -1;
+    w.title.value = place.label;
+    w.icon.value = place.icon;
+  }
+
+  /** The place a toolbar action leads to, or null when it does not apply. */
+  function folderToolTarget(w: WinCtl, tool: FolderTool): PlaceId | null {
+    const d = folderOf(w);
+    if (!folderToolEnabled(d, tool)) return null;
+    const h = d.hist.value;
+    if (tool === "back") return h.items[h.at - 1];
+    if (tool === "forward") return h.items[h.at + 1];
+    // Up: (C:) and the Recycle Bin hang off My Computer, My Documents off (C:).
+    return d.place.value === "documents" ? "drivec" : "computer";
+  }
+
+  function runFolderTool(w: WinCtl, tool: FolderTool) {
+    const target = folderToolTarget(w, tool);
+    if (target === null) return;
+    const d = folderOf(w);
+    if (tool === "back") d.hist.value = { ...d.hist.value, at: d.hist.value.at - 1 };
+    else if (tool === "forward")
+      d.hist.value = { ...d.hist.value, at: d.hist.value.at + 1 };
+    navigate(w, target, tool === "up");
+  }
+
+  /** Raise the window already showing `id`, or open one there. */
+  function openFolder(id: PlaceId) {
     const existing = wins.value.find(
-      (w) => w.kind === "folder" && w.title === title,
+      (w) => w.kind === "folder" && folderOf(w).place.value === id,
     );
     if (existing) return raise(existing.id);
-    const data: FolderData = { kind: "folder", rows, selected: ref(-1) };
+    const place = placeOf(id);
+    const data: FolderData = {
+      kind: "folder",
+      place: ref<PlaceId>(id),
+      rows: shallowRef<FolderRow[]>([]),
+      selected: ref(-1),
+      hist: shallowRef({ items: [id], at: 0 }),
+      toolHeld: ref<FolderTool | null>(null),
+    };
     const w = createWin({
       kind: "folder",
-      title,
-      icon,
-      geo: cascadePos(
-        wins.value.length,
-        vp.value.w,
-        vp.value.h,
-        geoW,
-        geoH,
-        metrics(),
-      ),
-      minW: 260,
-      minH: 160,
+      title: place.label,
+      icon: place.icon,
+      geo: cascadePos(wins.value.length, vp.value.w, vp.value.h, 560, 320, metrics()),
+      minW: 380,
+      minH: 180,
       data,
     });
+    data.rows.value = placeRows(id, w);
     addWin(w);
   }
 
-  function openMyComputer() {
-    openFolder("My Computer", "icons/computer-16.svg", [
-      {
-        icon: "icons/drive-16.svg",
-        name: "(C:)",
-        size: "",
-        type: "Local Disk",
-        open: () => {
-          openDriveC();
-        },
-      },
-      {
-        icon: "icons/cdrom-16.svg",
-        name: "(D:)",
-        size: "",
-        type: "CD-ROM Disc",
-      },
-      {
-        icon: "icons/folder-16.svg",
-        name: "Control Panel",
-        size: "",
-        type: "System Folder",
-      },
-      {
-        icon: "icons/folder-16.svg",
-        name: "Printers",
-        size: "",
-        type: "System Folder",
-      },
-    ]);
-  }
-
-  function openDriveC() {
-    openFolder("(C:)", "icons/drive-16.svg", [
-      {
-        icon: "icons/folder-16.svg",
-        name: "Program Files",
-        size: "",
-        type: "File Folder",
-      },
-      {
-        icon: "icons/folder-16.svg",
-        name: "Windows",
-        size: "",
-        type: "File Folder",
-      },
-      {
-        icon: "icons/file-16.svg",
-        name: "AUTOEXEC.BAT",
-        size: "1 KB",
-        type: "MS-DOS Batch File",
-      },
-      {
-        icon: "icons/file-16.svg",
-        name: "CONFIG.SYS",
-        size: "1 KB",
-        type: "System file",
-      },
-      {
-        icon: "icons/notepad-16.svg",
-        name: "README.TXT",
-        size: "2 KB",
-        type: "Text Document",
-        open: () => {
-          openNotepad("README.TXT - Notepad", WELCOME);
-        },
-      },
-    ]);
-  }
-
-  function openDocuments() {
-    openFolder("My Documents", "icons/folder-16.svg", [
-      {
-        icon: "icons/notepad-16.svg",
-        name: "welcome.txt",
-        size: "1 KB",
-        type: "Text Document",
-        open: () => {
-          openNotepad("welcome.txt - Notepad", WELCOME);
-        },
-      },
-    ]);
-  }
-
-  function openRecycle() {
-    openFolder("Recycle Bin", "icons/recycle-16.svg", []);
-  }
+  const openMyComputer = () => openFolder("computer");
+  const openDocuments = () => openFolder("documents");
+  const openRecycle = () => openFolder("recycle");
 
   function openAbout() {
     const existing = wins.value.find((w) => w.kind === "about");
@@ -778,7 +817,7 @@ export default function App() {
     const w = createWin({
       kind: "about",
       title: "About Pocket Desktop",
-      icon: "icons/computer-16.svg",
+      icon: "computer",
       geo: centered(ABOUT_GEO.w, ABOUT_GEO.h),
       buttons: ["close"],
       resizable: false,
@@ -798,7 +837,7 @@ export default function App() {
     const w = createWin({
       kind: "shutdown",
       title: "Shut Down Windows",
-      icon: "icons/shutdown-16.svg",
+      icon: "shutdown",
       geo: centered(SHUTDOWN_GEO.w, SHUTDOWN_GEO.h),
       buttons: ["close"],
       resizable: false,
@@ -814,11 +853,12 @@ export default function App() {
       CLASSIC_THEME.metrics,
       metrics(),
     );
+    const bar = metrics().screenBarH;
     return {
       x: Math.max(0, Math.round((vp.value.w - outer.w) / 2)),
       y: Math.max(
-        0,
-        Math.round((vp.value.h - metrics().taskH - outer.h) / 2),
+        bar,
+        bar + Math.round((vp.value.h - bar - metrics().taskH - outer.h) / 2),
       ),
       w: outer.w,
       h: outer.h,
@@ -840,19 +880,19 @@ export default function App() {
   // ---- desktop icons + start menu ----------------------------------------------
 
   const icons: DeskIcon[] = [
-    { icon: "icons/computer.svg", label: "My Computer", open: openMyComputer },
-    { icon: "icons/documents.svg", label: "My Documents", open: openDocuments },
-    { icon: "icons/recycle.svg", label: "Recycle Bin", open: openRecycle },
+    { icon: "computer", label: "My Computer", open: openMyComputer },
+    { icon: "documents", label: "My Documents", open: openDocuments },
+    { icon: "recycle", label: "Recycle Bin", open: openRecycle },
     {
-      icon: "icons/notepad.svg",
+      icon: "notepad",
       label: "Notepad",
       open: () => {
         openNotepad("Untitled - Notepad", [""]);
       },
     },
-    { icon: "icons/mines.svg", label: "Minesweeper", open: openMines },
-    ...POCKET_APPS.map((app) => ({
-      icon: POCKET_ICON,
+    { icon: "mines", label: "Minesweeper", open: openMines },
+    ...POCKET_APPS.map((app): DeskIcon => ({
+      icon: "pocket",
       label: app.title,
       open: () => openPocketApp(app),
     })),
@@ -864,6 +904,8 @@ export default function App() {
       y,
       icons.length,
       desktopIconRows(vp.value.h, metrics()),
+      metrics(),
+      vp.value.w,
     );
   }
 
@@ -872,15 +914,15 @@ export default function App() {
   const programItems = (): PopupItem[] => [
     {
       label: "Notepad",
-      icon: "icons/notepad-16.svg",
+      icon: "notepad",
       act: () => {
         openNotepad("Untitled - Notepad", [""]);
       },
     },
-    { label: "Minesweeper", icon: "icons/mines-16.svg", act: openMines },
-    ...POCKET_APPS.map((app) => ({
+    { label: "Minesweeper", icon: "mines", act: openMines },
+    ...POCKET_APPS.map((app): PopupItem => ({
       label: app.title,
-      icon: POCKET_ICON_SMALL,
+      icon: "pocket",
       act: () => openPocketApp(app),
     })),
   ];
@@ -897,7 +939,7 @@ export default function App() {
   const documentItems = (): PopupItem[] => [
     {
       label: "welcome.txt",
-      icon: "icons/notepad-16.svg",
+      icon: "notepad",
       act: () => {
         openNotepad("welcome.txt - Notepad", WELCOME);
       },
@@ -909,60 +951,60 @@ export default function App() {
   const xpStartItems = (): PopupItem[] => [
     {
       label: "Notepad",
-      icon: "icons/notepad-16.svg",
+      icon: "notepad",
       act: () => {
         openNotepad("Untitled - Notepad", [""]);
       },
     },
-    { label: "Minesweeper", icon: "icons/mines-16.svg", act: openMines },
+    { label: "Minesweeper", icon: "mines", act: openMines },
     { sep: true, label: "" },
-    ...POCKET_APPS.slice(0, 5).map((app) => ({
+    ...POCKET_APPS.slice(0, 5).map((app): PopupItem => ({
       label: app.title,
-      icon: POCKET_ICON_SMALL,
+      icon: "pocket",
       act: () => openPocketApp(app),
     })),
     { sep: true, label: "", bottom: true },
     {
       label: "All Programs",
-      icon: "icons/folder-16.svg",
+      icon: "folder",
       bottom: true,
       sub: programItems(),
     },
     {
       label: "My Documents",
-      icon: "icons/folder-16.svg",
+      icon: "folder",
       col: "right",
       sub: documentItems(),
     },
     {
       label: "My Computer",
-      icon: "icons/computer-16.svg",
+      icon: "computer",
       col: "right",
       act: openMyComputer,
     },
     { sep: true, label: "", col: "right" },
     {
       label: "Settings",
-      icon: "icons/settings-16.svg",
+      icon: "settings",
       col: "right",
       sub: themeItems(),
     },
     {
       label: "Help",
-      icon: "icons/help-16.svg",
+      icon: "help",
       col: "right",
       act: openAbout,
     },
     { sep: true, label: "", col: "right" },
     {
       label: "Run...",
-      icon: "icons/run-16.svg",
+      icon: "run",
       col: "right",
       disabled: true,
     },
     {
       label: "Turn Off Computer",
-      icon: "icons/xp-power.svg",
+      icon: "power",
       foot: true,
       act: openShutdown,
     },
@@ -971,30 +1013,30 @@ export default function App() {
   const classicStartItems = (): PopupItem[] => [
     {
       label: "Programs",
-      icon: "icons/folder-16.svg",
+      icon: "folder",
       sub: [
         {
           label: "Notepad",
-          icon: "icons/notepad-16.svg",
+          icon: "notepad",
           act: () => {
             openNotepad("Untitled - Notepad", [""]);
           },
         },
-        { label: "Minesweeper", icon: "icons/mines-16.svg", act: openMines },
-        ...POCKET_APPS.map((app) => ({
+        { label: "Minesweeper", icon: "mines", act: openMines },
+        ...POCKET_APPS.map((app): PopupItem => ({
           label: app.title,
-          icon: POCKET_ICON_SMALL,
+          icon: "pocket",
           act: () => openPocketApp(app),
         })),
       ],
     },
     {
       label: "Documents",
-      icon: "icons/folder-16.svg",
+      icon: "folder",
       sub: [
         {
           label: "welcome.txt",
-          icon: "icons/notepad-16.svg",
+          icon: "notepad",
           act: () => {
             openNotepad("welcome.txt - Notepad", WELCOME);
           },
@@ -1003,7 +1045,7 @@ export default function App() {
     },
     {
       label: "Settings",
-      icon: "icons/settings-16.svg",
+      icon: "settings",
       sub: THEMES.map((item) => ({
         label: item.label,
         checked: item.id === themeId.value,
@@ -1012,19 +1054,33 @@ export default function App() {
         },
       })),
     },
-    { label: "Find", icon: "icons/find-16.svg", disabled: true },
-    { label: "Help", icon: "icons/help-16.svg", act: openAbout },
-    { label: "Run...", icon: "icons/run-16.svg", disabled: true },
+    { label: "Find", icon: "find", disabled: true },
+    { label: "Help", icon: "help", act: openAbout },
+    { label: "Run...", icon: "run", disabled: true },
     { sep: true, label: "" },
-    { label: "Shut Down...", icon: "icons/shutdown-16.svg", act: openShutdown },
+    { label: "Shut Down...", icon: "shutdown", act: openShutdown },
   ];
 
-  /** Separator height inside dropdown popups (the Start panel's own comes
-   *  from the theme metrics). */
-  const POPUP_SEP = 8;
+  /** Aqua's logo menu: About first, the places and the theme picker, the
+   *  session commands last — the shape of the menu under the mark. */
+  const aquaStartItems = (): PopupItem[] => [
+    { label: "About Pocket Desktop", act: openAbout },
+    { sep: true, label: "" },
+    { label: "Programs", icon: "folder", sub: programItems() },
+    { label: "Documents", icon: "documents", sub: documentItems() },
+    { label: "My Computer", icon: "computer", act: openMyComputer },
+    { sep: true, label: "" },
+    { label: "Settings", icon: "settings", sub: themeItems() },
+    { sep: true, label: "" },
+    { label: "Shut Down...", icon: "shutdown", act: openShutdown },
+  ];
 
-  const startItems = (): PopupItem[] =>
-    metrics().startHeaderH > 0 ? xpStartItems() : classicStartItems();
+  const startItems = (): PopupItem[] => {
+    const style = theme().startStyle;
+    if (style === "panel") return xpStartItems();
+    if (style === "menu") return aquaStartItems();
+    return classicStartItems();
+  };
 
   /** The panel rectangle both the render and hit testing read. */
   const startGeo = () => startLayout(startItems(), vp.value.h, metrics());
@@ -1046,24 +1102,20 @@ export default function App() {
           14,
       );
     }
-    const h = 2 + items.reduce((a, it) => a + (it.sep ? POPUP_SEP : 18), 0);
+    const h = popupHeight(items, metrics());
     return {
       x: Math.min(x, vp.value.w - w - 2),
-      y: Math.min(y, vp.value.h - metrics().taskH - h),
+      y: Math.max(
+        metrics().screenBarH,
+        Math.min(y, vp.value.h - metrics().taskH - h),
+      ),
       w: Math.max(w, 120),
       items,
     };
   }
 
   function popupItemAt(p: Popup, x: number, y: number): number {
-    if (x < p.x + 1 || x >= p.x + p.w - 1) return -1;
-    let oy = p.y + 1;
-    for (let i = 0; i < p.items.length; i++) {
-      const h = p.items[i].sep ? POPUP_SEP : 18;
-      if (y >= oy && y < oy + h) return p.items[i].sep ? -1 : i;
-      oy += h;
-    }
-    return -1;
+    return popupRowAt(p.items, x - p.x, y - p.y, p.w, metrics());
   }
 
   function closeMenus() {
@@ -1083,6 +1135,73 @@ export default function App() {
       startFly.value = null;
       startHover.value = -1;
       flyHover.value = -1;
+    }
+  }
+
+  // ---- menus ----------------------------------------------------------------------
+
+  /** Program name the screen bar shows beside the logo — the focused
+   *  window's program, or the shell's own when nothing is focused. */
+  function appNameOf(w: WinCtl | undefined): string {
+    if (!w) return "Pocket Desktop";
+    if (w.kind === "notepad") return "Notepad";
+    if (w.kind === "mines") return "Minesweeper";
+    if (w.kind === "folder") return "Files";
+    if (w.kind === "pocket") return pocketOf(w).app.title;
+    return "Pocket Desktop";
+  }
+
+  /** Left x of the first menu title in the screen bar: after the logo and
+   *  the program name (bold face plus the screenBarApp px-[8] pads). */
+  function screenMenuX0(): number {
+    const name = appNameOf(focused());
+    return (
+      metrics().taskStartW +
+      (name !== "" ? measure(name, theme().fontSlot("bold")) + 16 : 0)
+    );
+  }
+
+  /** Where a menu title's dropdown hangs: under the window's own bar, or
+   *  under the screen bar when the theme hoists menus there. */
+  function menuPopupOrigin(w: WinCtl, index: number): { x: number; y: number } {
+    const widths = (w.menus ?? []).map((m) => m.width);
+    if (metrics().screenBarH > 0)
+      return {
+        x: menuTitleX(index, screenMenuX0(), widths),
+        y: metrics().screenBarH,
+      };
+    const g = w.geo.value;
+    return {
+      x: menuTitleX(index, g.x + metrics().frame, widths),
+      y:
+        g.y +
+        metrics().captionTop +
+        metrics().titleH +
+        metrics().titleGap +
+        metrics().menuH,
+    };
+  }
+
+  /** Menu title under the pointer for the window whose dropdown is open. */
+  function menuTitleAt(w: WinCtl, x: number, y: number): number {
+    if (!w.menus) return -1;
+    if (metrics().screenBarH > 0) {
+      if (y >= metrics().screenBarH || focusId.value !== w.id) return -1;
+      return menuIndexAt(x, screenMenuX0(), w.menus.map((m) => m.width));
+    }
+    const r = hitRegion(w.geo.value, chromeOpts(w), x, y, metrics());
+    return r?.kind === "menu" ? r.index : -1;
+  }
+
+  function openWindowMenu(w: WinCtl, index: number) {
+    const open = w.openMenu.value === index ? -1 : index;
+    w.openMenu.value = open;
+    if (open >= 0 && w.menus) {
+      const o = menuPopupOrigin(w, open);
+      popup.value = {
+        popup: buildPopup(o.x, o.y, w.menus[open].items()),
+        winId: w.id,
+      };
     }
   }
 
@@ -1191,15 +1310,24 @@ export default function App() {
       return;
     }
 
-    // Taskbar.
-    if (my >= vp.value.h - metrics().taskH) {
-      if (
-        mx >= metrics().taskLeft &&
-        mx < metrics().taskLeft + metrics().taskStartW
-      ) {
-        startOpen.value = !startOpen.value;
-        return;
+    // Launcher: the Start button, or the logo in the screen bar.
+    if (launcherHit(mx, my, vp.value.h, metrics())) {
+      startOpen.value = !startOpen.value;
+      return;
+    }
+
+    // Screen bar: the focused window's menu titles; the rest swallows.
+    if (metrics().screenBarH > 0 && my < metrics().screenBarH) {
+      const w = focused();
+      if (w) {
+        const i = menuTitleAt(w, mx, my);
+        if (i >= 0) openWindowMenu(w, i);
       }
+      return;
+    }
+
+    // Task strip.
+    if (my >= vp.value.h - metrics().taskH) {
       const entry = taskEntryAt(mx, my);
       if (entry !== -1) {
         const id = wins.value[entry].id;
@@ -1243,24 +1371,7 @@ export default function App() {
         return;
       }
       if (region.kind === "menu") {
-        const open = w.openMenu.value === region.index ? -1 : region.index;
-        w.openMenu.value = open;
-        if (open >= 0 && w.menus) {
-          const mxs = w.menus.slice(0, open).reduce((a, m) => a + m.width, 0);
-          const g = w.geo.value;
-          popup.value = {
-            popup: buildPopup(
-              g.x + metrics().frame + mxs,
-              g.y +
-                metrics().captionTop +
-                metrics().titleH +
-                metrics().titleGap +
-                metrics().menuH,
-              w.menus[open].items(),
-            ),
-            winId: w.id,
-          };
-        }
+        openWindowMenu(w, region.index);
         return;
       }
       routeContentDown(w, region.cx, region.cy, shift);
@@ -1311,9 +1422,21 @@ export default function App() {
     }
     if (w.kind === "folder") {
       const d = folderOf(w);
-      const row = folderRowAt(cy, d.rows.length);
+      const hit = folderHit(cx, cy, d.rows.value.length, PLACES.length, theme());
+      if (hit?.kind === "tool") {
+        if (folderToolEnabled(d, hit.tool)) {
+          drag = { type: "toolbtn", id: w.id, tool: hit.tool };
+          d.toolHeld.value = hit.tool;
+        }
+        return;
+      }
+      if (hit?.kind === "place") {
+        navigate(w, PLACES[hit.i].id);
+        return;
+      }
+      const row = hit?.kind === "row" ? hit.i : -1;
       d.selected.value = row;
-      if (row >= 0 && isDblClick(`row:${w.id}:${row}`)) d.rows[row].open?.();
+      if (row >= 0 && isDblClick(`row:${w.id}:${row}`)) d.rows.value[row].open?.();
       return;
     }
     if (w.kind === "about") {
@@ -1419,7 +1542,7 @@ export default function App() {
       }
       return;
     }
-    if (my < vp.value.h - metrics().taskH) {
+    if (my >= metrics().screenBarH && my < vp.value.h - metrics().taskH) {
       const icon = iconAt(mx, my);
       iconSel.value = icon;
       popup.value = {
@@ -1475,29 +1598,12 @@ export default function App() {
       if (pop.winId !== undefined) {
         const w = byId(pop.winId);
         if (w?.menus) {
-          const r = hitRegion(
-            w.geo.value,
-            chromeOpts(w),
-            mx,
-            my,
-            metrics(),
-          );
-          if (r?.kind === "menu" && r.index !== w.openMenu.value) {
-            w.openMenu.value = r.index;
-            const mxs = w.menus
-              .slice(0, r.index)
-              .reduce((a, m) => a + m.width, 0);
-            const g = w.geo.value;
+          const i = menuTitleAt(w, mx, my);
+          if (i >= 0 && i !== w.openMenu.value) {
+            w.openMenu.value = i;
+            const o = menuPopupOrigin(w, i);
             popup.value = {
-              popup: buildPopup(
-                g.x + metrics().frame + mxs,
-                g.y +
-                  metrics().captionTop +
-                  metrics().titleH +
-                  metrics().titleGap +
-                  metrics().menuH,
-                w.menus[r.index].items(),
-              ),
+              popup: buildPopup(o.x, o.y, w.menus[i].items()),
               winId: w.id,
             };
           }
@@ -1592,6 +1698,20 @@ export default function App() {
       }
       return;
     }
+    if (drag?.type === "toolbtn") {
+      const w = byId(drag.id);
+      if (w) {
+        const r = hitRegion(w.geo.value, chromeOpts(w), mx, my, metrics());
+        const d = folderOf(w);
+        const hit =
+          r?.kind === "content"
+            ? folderHit(r.cx, r.cy, d.rows.value.length, PLACES.length, theme())
+            : null;
+        d.toolHeld.value =
+          hit?.kind === "tool" && hit.tool === drag.tool ? drag.tool : null;
+      }
+      return;
+    }
     if (drag?.type === "dialogbtn") {
       const w = byId(drag.id);
       if (w) {
@@ -1622,13 +1742,19 @@ export default function App() {
       return;
     }
 
-    // Hover cursor shape.
+    // Hover cursor shape, and which caption's control cluster is under the
+    // pointer (themes may reveal the control glyphs only then).
     let k: CursorKind = "default";
     const hover = hitWindows(mx, my);
     if (hover) {
       if (hover.region.kind === "resize") k = cursorForDir(hover.region.dir);
       else if (hover.region.kind === "content" && hover.win.kind === "notepad")
         k = "text";
+    }
+    const hoverCluster = hover?.region.kind === "button" ? hover.win.id : -1;
+    for (const w of wins.value) {
+      const on = w.id === hoverCluster;
+      if (w.captionHover.value !== on) w.captionHover.value = on;
     }
     sendCursor(k);
   }
@@ -1676,6 +1802,16 @@ export default function App() {
         );
         if (r?.kind === "content" && minesHit(r.cx, r.cy)?.type === "smiley")
           minesNew(w);
+      }
+      return;
+    }
+    if (d.type === "toolbtn") {
+      const w = byId(d.id);
+      if (w) {
+        const fd = folderOf(w);
+        const held = fd.toolHeld.value;
+        fd.toolHeld.value = null;
+        if (held === d.tool) runFolderTool(w, d.tool);
       }
       return;
     }
@@ -1732,7 +1868,7 @@ export default function App() {
         return;
       }
       case "t":
-        if (shift) setTheme(themeId.value === "classic" ? "xp" : "classic");
+        if (shift) setTheme(nextThemeId(themeId.value));
         return;
       case "a": {
         const p = focusedPad();
@@ -1882,38 +2018,21 @@ export default function App() {
   const taskEntries = (): TaskEntry[] =>
     wins.value
       .filter((w) => w.kind !== "shutdown")
-      .map((w) => ({ id: w.id, title: w.title, icon: w.icon }));
-  const taskButtonW = () => {
-    const n = Math.max(1, taskEntries().length);
-    return Math.min(
-      160,
-      Math.floor(
-        (vp.value.w -
-          metrics().taskLeft -
-          metrics().taskStartW -
-          72 -
-          n * metrics().taskGap) /
-          n,
-      ),
-    );
-  };
+      .map((w) => ({ id: w.id, title: w.title.value, icon: w.icon.value }));
+  const taskButtonW = () =>
+    taskLayout(vp.value.w, vp.value.h, taskEntries().length, metrics()).buttonW;
 
   function taskEntryAt(x: number, y: number): number {
-    if (y < vp.value.h - metrics().taskH + 3) return -1;
     const entries = taskEntries();
-    const w = taskButtonW();
-    const x0 =
-      metrics().taskLeft +
-      metrics().taskStartW +
-      metrics().taskGap * 2 +
-      1;
-    for (let i = 0; i < entries.length; i++) {
-      const bx = x0 + i * (w + metrics().taskGap);
-      if (x >= bx && x < bx + w) {
-        return wins.value.findIndex((win) => win.id === entries[i].id);
-      }
-    }
-    return -1;
+    const i = taskEntryIndexAt(
+      x,
+      y,
+      vp.value.w,
+      vp.value.h,
+      entries.length,
+      metrics(),
+    );
+    return i < 0 ? -1 : wins.value.findIndex((win) => win.id === entries[i].id);
   }
 
   // ---- frame pump -------------------------------------------------------------------
@@ -2067,6 +2186,7 @@ export default function App() {
         icons={icons}
         selected={iconSel.value}
         rows={desktopIconRows(vp.value.h, metrics())}
+        viewportW={vp.value.w}
         theme={theme()}
       />
       {wins.value.map((w) => (
@@ -2110,6 +2230,16 @@ export default function App() {
         <PopupPanel
           popup={popup.value.popup}
           hover={popupHover.value}
+          theme={theme()}
+        />
+      ) : null}
+      {metrics().screenBarH > 0 ? (
+        <ScreenBar
+          startOpen={startOpen.value}
+          appName={appNameOf(focused())}
+          menus={focused()?.menus ?? null}
+          openMenu={focused()?.openMenu.value ?? -1}
+          clock={clock.value}
           theme={theme()}
         />
       ) : null}

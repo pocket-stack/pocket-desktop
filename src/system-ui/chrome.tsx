@@ -5,14 +5,21 @@
 // stream, so nothing in this file registers a handler. Geometry mirrors
 // wm.ts through the active theme's ChromeMetrics.
 //
+// Each component renders one SEMANTIC part of the shell — a control cluster,
+// a task strip, a launcher panel — and asks the theme for its classes, its
+// layers and its icon artwork. Nothing here branches on a theme id: where a
+// part can sit in different places (controls left or right, menus in the
+// window or in a screen bar, task buttons in a strip or a Dock) the choice
+// rides a ChromeMetrics field the window manager reads too.
+//
 // Class strings are FULL literals throughout — the style table compiles at
 // build time and template-interpolated fragments are a compile error, so the
 // complete theme-selected classes stay visible to the compiler.
 
 import { Image, Text, View } from "@pocketjs/framework/components";
-import { type DesktopTheme } from "./theme.ts";
-import type { DeskIcon, Popup, TaskEntry, WinCtl } from "./state.ts";
-import { desktopIconPosition } from "./wm.ts";
+import { type CaptionState, type DesktopTheme } from "./theme.ts";
+import type { DeskIcon, MenuDef, Popup, TaskEntry, WinCtl } from "./state.ts";
+import { captionSlots, desktopIconPosition } from "./wm.ts";
 
 /** Desktop text. The baked slot rides the style prop — the class table never
  *  sees it (baked per-app via pak.json, docs in gen-assets.ts) — and the
@@ -40,97 +47,106 @@ export function UiText(props: {
   );
 }
 
-/** Caption controls. wm.ts mirrors the theme-selected cell size, right inset
- *  and gap. app.tsx drives pressed feedback off the raw pointer stream. */
+/** Caption controls in the theme's visual order. wm.ts captionSlots mirrors
+ *  the theme-selected cell size, side, inset and gap; app.tsx drives pressed
+ *  and hover feedback off the raw pointer stream. Ghost cells (controls the
+ *  window lacks) only appear for themes that ask for them. */
 export function CaptionButtons(props: {
   win: WinCtl;
   active: boolean;
   theme: DesktopTheme;
 }) {
   const w = props.win;
+  const state = (btn: WinCtl["buttons"][number], present: boolean): CaptionState => ({
+    pressed: w.pressedBtn.value === btn,
+    hover: w.captionHover.value,
+    active: props.active,
+    present,
+  });
   return (
     <View class={props.theme.captionControls}>
-      {w.buttons.map((btn) => (
-        <View
-          class={props.theme.captionButton(
-            btn,
-            w.pressedBtn.value === btn,
-            props.active,
-          )}
-        >
-          {props.theme
-            .captionButtonLayers(btn, w.pressedBtn.value === btn, props.active)
-            .map((cls) => (
-              <View class={cls} />
-            ))}
-          <Image
-            class={props.theme.captionGlyphClass(
-              w.pressedBtn.value === btn,
+      {captionSlots(w.geo.value.w, w.buttons, props.theme.metrics).map(
+        (slot) => (
+          <View
+            class={props.theme.captionButton(
+              slot.button,
+              state(slot.button, slot.present),
             )}
-            src={props.theme.captionGlyphSource(
-              btn,
-              btn === "max" && w.maximized.value,
-            )}
-          />
-        </View>
-      ))}
+          >
+            {props.theme.captionFace(slot.button, state(slot.button, slot.present)) !== "" ? (
+              <Image
+                class={props.theme.captionFaceClass}
+                src={props.theme.captionFace(slot.button, state(slot.button, slot.present))}
+              />
+            ) : null}
+            {props.theme
+              .captionButtonLayers(slot.button, state(slot.button, slot.present))
+              .map((cls) => (
+                <View class={cls} />
+              ))}
+            {props.theme.captionGlyphSource(
+              slot.button,
+              slot.button === "max" && w.maximized.value,
+              state(slot.button, slot.present),
+            ) !== "" ? (
+              <Image
+                class={props.theme.captionGlyphClass(
+                  state(slot.button, slot.present),
+                )}
+                src={props.theme.captionGlyphSource(
+                  slot.button,
+                  slot.button === "max" && w.maximized.value,
+                  state(slot.button, slot.present),
+                )}
+              />
+            ) : null}
+          </View>
+        ),
+      )}
     </View>
   );
 }
 
-/** The taskbar: the Start button (PocketJS favicon mark, gen-icons
- *  start-logo), one button per window, the sunken clock tray. */
-export function Taskbar(props: {
-  entries: TaskEntry[];
-  activeId: number;
+/** The screen-top bar (only mounted while `metrics.screenBarH > 0`): the
+ *  launcher logo at the left end, the focused program's name and its menu
+ *  titles, the clock at the right end. Hit widths come from app.tsx, which
+ *  measures the same labels in the same face. */
+export function ScreenBar(props: {
   startOpen: boolean;
+  appName: string;
+  menus: MenuDef[] | null;
+  openMenu: number;
   clock: string;
-  buttonW: number;
   theme: DesktopTheme;
 }) {
   return (
-    <View
-      class={props.theme.taskbar}
-      style={{ zIndex: 10000 }}
-    >
-      {props.theme.taskbarLayers.map((cls) => (
+    <View class={props.theme.screenBar} style={{ zIndex: 10000 }}>
+      {props.theme.screenBarLayers.map((cls) => (
         <View class={cls} />
       ))}
-      <View
-        class={props.theme.startButton(props.startOpen)}
-      >
-        {props.theme.startLayers(props.startOpen).map((cls) => (
-          <View class={cls} />
-        ))}
-        {props.theme.startLogo !== "" ? (
-          <Image class="w-[16] h-[16]" src={props.theme.startLogo} />
-        ) : null}
-        <UiText
-          theme={props.theme}
-          bold
-          cls={props.theme.startText}
-          t="Start"
-        />
+      <View class={props.theme.screenBarLogo(props.startOpen)}>
+        <Image class="w-[16] h-[16]" src={props.theme.icon("start", 16)} />
       </View>
-      <View class={props.theme.taskDivider} />
-      <View class={props.theme.taskList}>
-        {props.entries.map((entry) => (
-          <View
-            class={props.theme.taskButton(entry.id === props.activeId)}
-            style={{ width: props.buttonW }}
-          >
-            <Image class="w-[16] h-[16]" src={entry.icon} />
-            <View class="flex-1 flex-row overflow-hidden">
-              <UiText
-                theme={props.theme}
-                bold={entry.id === props.activeId}
-                cls={props.theme.taskText(entry.id === props.activeId)}
-                t={entry.title}
-              />
-            </View>
-          </View>
-        ))}
-      </View>
+      {props.appName !== "" ? (
+        <View class={props.theme.screenBarApp}>
+          <UiText
+            theme={props.theme}
+            bold
+            cls={props.theme.screenBarAppText}
+            t={props.appName}
+          />
+        </View>
+      ) : null}
+      {(props.menus ?? []).map((menu, i) => (
+        <View class={props.theme.menuItem(props.openMenu === i)}>
+          <UiText
+            theme={props.theme}
+            cls={props.theme.menuText(props.openMenu === i)}
+            t={menu.label}
+          />
+        </View>
+      ))}
+      <View class="flex-1" />
       <View class={props.theme.tray}>
         {props.theme.trayLayers.map((cls) => (
           <View class={cls} />
@@ -141,7 +157,102 @@ export function Taskbar(props: {
   );
 }
 
-/** Generic popup menu panel (context menus, dropdowns, start flyouts). */
+/** The task strip: the launcher button, one button per window, the clock
+ *  tray. With a screen bar the launcher and the clock live up there and the
+ *  strip is a Dock — a centered shelf of icon tiles with running marks. */
+export function Taskbar(props: {
+  entries: TaskEntry[];
+  activeId: number;
+  startOpen: boolean;
+  clock: string;
+  buttonW: number;
+  theme: DesktopTheme;
+}) {
+  // Read through props on every evaluation: a bare const here would capture
+  // the boot theme's answer for the life of the component.
+  const dock = () => props.theme.metrics.screenBarH > 0;
+  return (
+    <View
+      class={props.theme.taskbar}
+      style={{ zIndex: 10000 }}
+    >
+      {props.theme.taskbarLayers.map((cls) => (
+        <View class={cls} />
+      ))}
+      {!dock() ? (
+        <View class={props.theme.startButton(props.startOpen)}>
+          {props.theme.startFace(props.startOpen) !== "" ? (
+            <Image
+              class={props.theme.startFaceClass}
+              src={props.theme.startFace(props.startOpen)}
+            />
+          ) : null}
+          {props.theme.startLayers(props.startOpen).map((cls) => (
+            <View class={cls} />
+          ))}
+          {props.theme.startLogo !== "" ? (
+            <Image class="w-[16] h-[16]" src={props.theme.startLogo} />
+          ) : null}
+          <UiText
+            theme={props.theme}
+            bold
+            cls={props.theme.startText}
+            t="Start"
+          />
+        </View>
+      ) : null}
+      {!dock() ? <View class={props.theme.taskDivider} /> : null}
+      {!dock() || props.entries.length > 0 ? (
+        <View class={props.theme.taskList}>
+          {props.entries.map((entry) => (
+            <View
+              class={props.theme.taskButton(entry.id === props.activeId)}
+              style={{ width: props.buttonW }}
+            >
+              {props.theme
+                .taskButtonLayers(entry.id === props.activeId)
+                .map((cls) => (
+                  <View class={cls} />
+                ))}
+              <Image
+                class={props.theme.taskIcon}
+                src={props.theme.icon(entry.icon, dock() ? 32 : 16)}
+              />
+              {props.theme.taskShowLabel ? (
+                <View class="flex-1 flex-row overflow-hidden">
+                  <UiText
+                    theme={props.theme}
+                    bold={entry.id === props.activeId}
+                    cls={props.theme.taskText(entry.id === props.activeId)}
+                    t={entry.title}
+                  />
+                </View>
+              ) : null}
+              {props.theme.taskMark(entry.id === props.activeId) !== "" ? (
+                <Image
+                  class={props.theme.taskMarkClass}
+                  src={props.theme.taskMark(entry.id === props.activeId)}
+                />
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {!dock() ? (
+        <View class={props.theme.tray}>
+          {props.theme.trayLayers.map((cls) => (
+            <View class={cls} />
+          ))}
+          <UiText theme={props.theme} cls={props.theme.trayText} t={props.clock} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Generic popup menu panel (context menus, dropdowns, start flyouts). Row
+ *  and separator heights are the theme's popupRowH / popupSepH metrics,
+ *  which wm.ts popupRowAt hit-tests against. */
 export function PopupPanel(props: {
   popup: Popup;
   hover: number;
@@ -159,9 +270,12 @@ export function PopupPanel(props: {
         zIndex: 20000,
       }}
     >
+      {props.theme.popupLayers.map((cls) => (
+        <View class={cls} />
+      ))}
       {props.popup.items.map((item, i) =>
         item.sep ? (
-          <View class="h-[8] flex-col justify-center px-[1]">
+          <View class={props.theme.popupSeparator}>
             <View class={props.theme.popupSeparatorDark} />
             <View class={props.theme.popupSeparatorLight} />
           </View>
@@ -172,9 +286,9 @@ export function PopupPanel(props: {
             )}
           >
             {item.checked ? (
-              <Image class="w-[16] h-[16]" src="icons/check-16.svg" />
+              <Image class="w-[16] h-[16]" src={props.theme.icon("check", 16)} />
             ) : item.icon ? (
-              <Image class="w-[16] h-[16]" src={item.icon} />
+              <Image class="w-[16] h-[16]" src={props.theme.icon(item.icon, 16)} />
             ) : (
               <View class="w-[16] h-[16]" />
             )}
@@ -205,7 +319,10 @@ export function PopupPanel(props: {
               />
             ) : null}
             {item.sub ? (
-              <Image class="w-[8] h-[8] ml-[2]" src="icons/menu-arrow.svg" />
+              <Image
+                class="w-[8] h-[8] ml-[2]"
+                src={props.theme.icon("menuArrow", 16)}
+              />
             ) : null}
           </View>
         ),
@@ -222,7 +339,11 @@ function StartRow(props: {
 }) {
   return (
     <View class={props.theme.startItem(props.hover && !props.item.disabled)}>
-      <Image class="w-[16] h-[16]" src={props.item.icon ?? ""} />
+      {props.item.icon ? (
+        <Image class="w-[16] h-[16]" src={props.theme.icon(props.item.icon, 16)} />
+      ) : (
+        <View class="w-[16] h-[16]" />
+      )}
       <View class="flex-1 flex-row">
         <UiText
           theme={props.theme}
@@ -238,7 +359,7 @@ function StartRow(props: {
         />
       </View>
       {props.item.sub ? (
-        <Image class="w-[8] h-[8]" src="icons/menu-arrow.svg" />
+        <Image class="w-[8] h-[8]" src={props.theme.icon("menuArrow", 16)} />
       ) : null}
     </View>
   );
@@ -289,7 +410,7 @@ export function StartPanel(props: {
         {props.theme.startHeaderLayers.map((cls) => (
           <View class={cls} />
         ))}
-        <Image class={props.theme.startHeaderIcon} src="icons/xp-user.svg" />
+        <Image class={props.theme.startHeaderIcon} src={props.theme.icon("user", 32)} />
         <UiText
           theme={props.theme}
           bold
@@ -344,7 +465,9 @@ export function StartPanel(props: {
         ))}
         {at((it) => !!it.foot).map((e) => (
           <View class={props.theme.startFooterItem(props.hover === e.i)}>
-            <Image class="w-[16] h-[16]" src={e.item.icon ?? ""} />
+            {e.item.icon ? (
+              <Image class="w-[16] h-[16]" src={props.theme.icon(e.item.icon, 16)} />
+            ) : null}
             <UiText
               theme={props.theme}
               cls={props.theme.startFooterText}
@@ -357,7 +480,10 @@ export function StartPanel(props: {
   );
 }
 
-/** The Classic Start menu: rail + 26px rows; flyouts render as PopupPanels. */
+/** The single-column Start menu: an optional rail plus one row per item.
+ *  Classic paints it rising from the taskbar beside its blue rail; Aqua
+ *  hangs the same panel, rail-less, from the screen bar. Flyouts render as
+ *  PopupPanels. */
 export function StartMenu(props: {
   x: number;
   y: number;
@@ -380,11 +506,14 @@ export function StartMenu(props: {
         zIndex: 19000,
       }}
     >
+      {props.theme.startMenuLayers.map((cls) => (
+        <View class={cls} />
+      ))}
       <View class={props.theme.startRail} />
       <View class="flex-1 flex-col">
         {props.items.map((item, i) =>
           item.sep ? (
-            <View class="h-[8] flex-col justify-center px-[2]">
+            <View class={props.theme.popupSeparator}>
               <View class={props.theme.popupSeparatorDark} />
               <View class={props.theme.popupSeparatorLight} />
             </View>
@@ -394,7 +523,11 @@ export function StartMenu(props: {
                 props.hover === i && !item.disabled,
               )}
             >
-              <Image class="w-[16] h-[16]" src={item.icon ?? ""} />
+              {!props.theme.launcherIcons ? null : item.icon ? (
+                <Image class="w-[16] h-[16]" src={props.theme.icon(item.icon, 16)} />
+              ) : (
+                <View class="w-[16] h-[16]" />
+              )}
               <View class="flex-1 flex-row">
                 <UiText
                   theme={props.theme}
@@ -409,7 +542,7 @@ export function StartMenu(props: {
                 />
               </View>
               {item.sub ? (
-                <Image class="w-[8] h-[8]" src="icons/menu-arrow.svg" />
+                <Image class="w-[8] h-[8]" src={props.theme.icon("menuArrow", 16)} />
               ) : null}
             </View>
           ),
@@ -419,11 +552,13 @@ export function StartMenu(props: {
   );
 }
 
-/** Desktop icons: column-major 32px art + theme-selected labels. */
+/** Desktop icons: column-major 32px art + theme-selected labels, anchored
+ *  to the theme's screen edge. */
 export function DesktopIcons(props: {
   icons: DeskIcon[];
   selected: number;
   rows: number;
+  viewportW: number;
   theme: DesktopTheme;
 }) {
   return (
@@ -432,13 +567,27 @@ export function DesktopIcons(props: {
         <View
           class="absolute left-0 top-0 w-[74] h-[48] flex-col items-center gap-[3]"
           style={{
-            translateX: desktopIconPosition(i, props.rows).x,
-            translateY: desktopIconPosition(i, props.rows).y,
+            translateX: desktopIconPosition(
+              i,
+              props.rows,
+              props.theme.metrics,
+              props.viewportW,
+            ).x,
+            translateY: desktopIconPosition(
+              i,
+              props.rows,
+              props.theme.metrics,
+              props.viewportW,
+            ).y,
           }}
         >
-          <Image class="w-[32] h-[32]" src={icon.icon} />
+          <Image class="w-[32] h-[32]" src={props.theme.icon(icon.icon, 32)} />
           <View
-            class={props.selected === i ? props.theme.desktopSelection : "px-[2]"}
+            class={
+              props.selected === i
+                ? props.theme.desktopSelection
+                : props.theme.desktopLabelPlain
+            }
           >
             <UiText theme={props.theme} cls={props.theme.desktopLabel} t={icon.label} />
           </View>

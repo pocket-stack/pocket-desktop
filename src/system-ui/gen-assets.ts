@@ -4,12 +4,13 @@
 //
 //   bun src/system-ui/gen-assets.ts
 //
-// It also bakes the Luna face. Tahoma and Trebuchet MS (the fonts Windows XP
-// actually ships, and the ones sheru's winxp theme names) are Microsoft's and
-// cannot be redistributed, so the XP theme borrows the vendored Inter (OFL) —
-// the same neutral grotesque the framework's own slots use. Luna text is
-// antialiased, so these slots keep their coverage instead of thresholding it
-// the way the W95FA bitmap face does.
+// It also bakes the smooth face the XP and Aqua themes share. Tahoma and
+// Trebuchet MS (the fonts Windows XP ships) and Lucida Grande (Mac OS X's) are
+// Microsoft's and Apple's and cannot be redistributed, so both themes borrow
+// the vendored Inter (OFL) — the same neutral grotesque the framework's own
+// slots use. Their text is antialiased, so these slots keep their coverage
+// instead of thresholding it the way the W95FA bitmap face does. Aqua gets no
+// slots of its own: the five below are the whole app budget.
 //
 // Slots (spec.ts MAX_FONT_SLOTS is 24 and the framework pins 0..18, so the
 // five app-side slots below are the whole budget — a third XP size would
@@ -17,8 +18,8 @@
 //   19  W95FA 12.5px regular — the whole Classic desktop
 //   20  W95FA 12.5px synthetic bold (GDI smear: 1px max-blend + advance+1)
 //   21  W95FA 25px regular — Classic's About banner
-//   22  Inter 12px regular — the whole XP desktop
-//   23  Inter 12.5px bold — XP captions, task buttons, Start panel headings
+//   22  Inter 12px regular — the whole XP and Aqua desktops
+//   23  Inter 12.5px bold — XP/Aqua captions, task buttons, panel headings
 //
 // W95FA is a bitmap-font conversion on an 80-units/px grid at its native
 // 12.5px, with sloppy CFF floats (…129.92 for 130) and a 10-unit x phase.
