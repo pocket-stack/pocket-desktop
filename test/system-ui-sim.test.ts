@@ -147,6 +147,22 @@ describe("system-ui System UI companion journey", () => {
       treeHasClass(tree, XP_THEME.caption(true)),
     ).toBe(true);
 
+    // The All Programs flyout overlaps the places column. Hovering a flyout
+    // row that sits over a plain places row ("Run...") must keep the flyout
+    // open with that row highlighted. At 800x600 the panel body starts at
+    // y=291; All Programs sits at y=505 and its 13-row flyout is clamped to
+    // y=319 at x=170, so its "Chrome" row (index 6) spans y 433..452.
+    svc.push({ t: "key", k: "escape", cmd: true });
+    await step(world, 2);
+    mouse(svc, 80, 519, false);
+    await step(world, 2);
+    expect(treeHasText(world.getTree(), "All Programs")).toBe(true);
+    mouse(svc, 250, 445, false);
+    await step(world, 2);
+    expect(treeHasClass(world.getTree(), XP_THEME.popupItem(true))).toBe(true);
+    svc.push({ t: "key", k: "Escape" });
+    await step(world, 2);
+
     // ⌘⇧T cycles in picker order: XP -> Aqua (screen bar, Dock, no
     // in-window menu bar) -> Classic.
     svc.push({ t: "key", k: "t", cmd: true, sh: true });

@@ -1118,6 +1118,18 @@ export default function App() {
     return popupRowAt(p.items, x - p.x, y - p.y, p.w, metrics());
   }
 
+  /** Whether a point lies on the popup panel itself (rows, separators or
+   *  padding). A flyout overlaps the launcher panel it grew from, so while
+   *  the pointer is on the flyout the rows underneath must not react. */
+  function popupContains(p: Popup, x: number, y: number): boolean {
+    return (
+      x >= p.x &&
+      x < p.x + p.w &&
+      y >= p.y &&
+      y < p.y + popupHeight(p.items, metrics())
+    );
+  }
+
   function closeMenus() {
     startOpen.value = false;
     startFly.value = null;
@@ -1274,7 +1286,7 @@ export default function App() {
     // Open menus swallow the click (classic: outside-click only dismisses).
     if (startOpen.value) {
       const fly = startFly.value;
-      if (fly) {
+      if (fly && popupContains(fly.popup, mx, my)) {
         const i = popupItemAt(fly.popup, mx, my);
         if (i >= 0) {
           const item = fly.popup.items[i];
@@ -1282,8 +1294,8 @@ export default function App() {
             item.act();
             closeMenus();
           }
-          return;
         }
+        return;
       }
       const i = startItemAt(mx, my);
       if (i >= 0) {
@@ -1564,32 +1576,37 @@ export default function App() {
   }
 
   function onMove() {
-    // Menu hover states.
+    // Menu hover states. An open flyout takes the pointer first: it overlaps
+    // the panel's other column, and the rows under it must neither steal the
+    // hover nor close it.
     if (startOpen.value) {
-      const i = startItemAt(mx, my);
-      startHover.value = i;
-      if (i >= 0) {
-        const item = startItems()[i];
-        if (item.sub) {
-          if (startFly.value?.index !== i) {
-            const geo = startGeo();
-            const row = geo.rows.find((r: StartRow) => r.index === i);
-            startFly.value = {
-              index: i,
-              popup: buildPopup(
-                (row?.x ?? geo.x) + (row?.w ?? geo.w) - 3,
-                row?.y ?? geo.y,
-                item.sub,
-              ),
-            };
-            flyHover.value = -1;
-          }
-        } else if (startFly.value) {
-          startFly.value = null;
-        }
-      }
       const fly = startFly.value;
-      if (fly) flyHover.value = popupItemAt(fly.popup, mx, my);
+      if (fly && popupContains(fly.popup, mx, my)) {
+        flyHover.value = popupItemAt(fly.popup, mx, my);
+      } else {
+        const i = startItemAt(mx, my);
+        startHover.value = i;
+        if (i >= 0) {
+          const item = startItems()[i];
+          if (item.sub) {
+            if (startFly.value?.index !== i) {
+              const geo = startGeo();
+              const row = geo.rows.find((r: StartRow) => r.index === i);
+              startFly.value = {
+                index: i,
+                popup: buildPopup(
+                  (row?.x ?? geo.x) + (row?.w ?? geo.w) - 3,
+                  row?.y ?? geo.y,
+                  item.sub,
+                ),
+              };
+            }
+          } else if (startFly.value) {
+            startFly.value = null;
+          }
+        }
+        flyHover.value = -1;
+      }
     }
     const pop = popup.value;
     if (pop) {

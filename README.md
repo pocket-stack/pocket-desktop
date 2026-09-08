@@ -5,12 +5,13 @@ applications inside one native process. Its System UI owns windows, taskbar,
 application presentation and theme selection; PocketJS owns package
 resolution, AppInstance isolation, scheduling and native composition.
 
-## Three desktops, one shell
+## Themes
 
-Pocket Desktop ships three System UI themes. Each is a period desktop rebuilt
-from PocketJS-native drawing — no bitmaps of the originals, no theme-specific
-code paths outside the theme's own definition. **All three run on the same
-System manifest, AppInstances and native compositor.**
+Pocket Desktop ships three System UI themes: Classic 98, Windows XP and Aqua.
+Each is a period desktop rebuilt from PocketJS-native drawing — no bitmaps of
+the originals, no theme-specific code paths outside the theme's own
+definition. **All three run on the same System manifest, AppInstances and
+native compositor.**
 
 | Classic 98 | Windows XP | Aqua |
 |---|---|---|
