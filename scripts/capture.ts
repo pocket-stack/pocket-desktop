@@ -39,7 +39,8 @@ console.log(`Pocket Desktop: captured ${classicOutput}`);
 
 // Theme switching is a System UI action delivered through the same input
 // path as the native host. A minimal companion gives the capture a real
-// pointer/keyboard channel without adding any screenshot-only app API.
+// pointer/keyboard channel without adding any screenshot-only app API. One
+// world walks Classic -> XP -> Aqua with ⌘⇧T, capturing each stop.
 const inbox: string[] = [];
 const xp = await bootWorld(
   "pocket-desktop-system-ui.vue-vapor",
@@ -73,3 +74,18 @@ await Bun.write(
   encodePNG(xp.render(), WIDTH * SCALE, HEIGHT * SCALE),
 );
 console.log(`Pocket Desktop: captured ${xpOutput}`);
+
+// ⌘⇧T cycles on to Aqua (closing the XP panel); the logo menu then hangs
+// from the screen bar, and hovering its Settings row opens the theme flyout.
+inbox.push(JSON.stringify({ t: "key", k: "t", cmd: true, sh: true }));
+await settle(xp, 4);
+inbox.push(JSON.stringify({ t: "key", k: "escape", cmd: true }));
+await settle(xp, 2);
+inbox.push(JSON.stringify({ t: "mouse", x: 100, y: 131, d: false, sh: false }));
+await settle(xp, 2);
+const aquaOutput = resolve(ROOT, "docs/aqua-theme.png");
+await Bun.write(
+  aquaOutput,
+  encodePNG(xp.render(), WIDTH * SCALE, HEIGHT * SCALE),
+);
+console.log(`Pocket Desktop: captured ${aquaOutput}`);

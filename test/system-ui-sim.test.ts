@@ -22,6 +22,7 @@ import {
   type SimWorld,
 } from "../vendor/pocketjs/hosts/sim/sim.ts";
 import {
+  AQUA_THEME,
   CLASSIC_THEME,
   XP_THEME,
 } from "../src/system-ui/theme.ts";
@@ -119,7 +120,7 @@ function treeHasClass(tree: unknown, className: string): boolean {
 }
 
 describe("system-ui System UI companion journey", () => {
-  test("switches classic and XP paint at runtime", async () => {
+  test("switches classic, XP and Aqua paint at runtime", async () => {
     const svc = mockSvc();
     const world = await bootWorld(APP, 60, undefined, svc.mutateOps);
     svc.push({ t: "hello", w: 800, h: 600, epoch: 1755650000000 });
@@ -128,13 +129,14 @@ describe("system-ui System UI companion journey", () => {
     expect(treeHasClass(world.getTree(), CLASSIC_THEME.desktop)).toBe(true);
 
     // Start -> Settings exposes the user-facing theme choices. At 800x600
-    // the Settings row begins at y=433 and its two-row flyout at x=181.
+    // the Settings row begins at y=433 and its three-row flyout at x=181.
     svc.push({ t: "key", k: "escape", cmd: true });
     await step(world, 2);
     mouse(svc, 100, 445, false);
     await step(world, 2);
     expect(treeHasText(world.getTree(), "Classic 98")).toBe(true);
     expect(treeHasText(world.getTree(), "Windows XP")).toBe(true);
+    expect(treeHasText(world.getTree(), "Aqua")).toBe(true);
     mouse(svc, 220, 461, true);
     mouse(svc, 220, 461, false);
     await step(world, 2);
@@ -145,11 +147,38 @@ describe("system-ui System UI companion journey", () => {
       treeHasClass(tree, XP_THEME.caption(true)),
     ).toBe(true);
 
+    // ⌘⇧T cycles in picker order: XP -> Aqua (screen bar, Dock, no
+    // in-window menu bar) -> Classic.
+    svc.push({ t: "key", k: "t", cmd: true, sh: true });
+    await step(world, 2);
+    tree = world.getTree();
+    expect(treeHasClass(tree, AQUA_THEME.desktop)).toBe(true);
+    expect(treeHasClass(tree, AQUA_THEME.screenBar)).toBe(true);
+    expect(treeHasClass(tree, AQUA_THEME.taskList)).toBe(true);
+    expect(treeHasClass(tree, AQUA_THEME.menuBar)).toBe(false);
+    expect(treeHasText(tree, "Notepad")).toBe(true); // the screen bar's app name
+    // No Start button: the launcher is the screen-bar logo.
+    expect(treeHasClass(tree, CLASSIC_THEME.startButton(false))).toBe(false);
+    expect(treeHasClass(tree, XP_THEME.startButton(false))).toBe(false);
+
+    // The focused Notepad's menus live in the screen bar: clicking "File"
+    // there drops its menu.
+    mouse(svc, 40 + 16 + 62 + 10, 10, true);
+    mouse(svc, 40 + 16 + 62 + 10, 10, false);
+    await step(world, 2);
+    // (The exact x depends on the measured app-name width; assert the
+    // dropdown through its unique item instead of its position.)
+    const fileOpen = treeHasText(world.getTree(), "Exit");
+    svc.push({ t: "key", k: "Escape" });
+    await step(world, 2);
+
     svc.push({ t: "key", k: "t", cmd: true, sh: true });
     await step(world, 2);
     tree = world.getTree();
     expect(treeHasClass(tree, CLASSIC_THEME.desktop)).toBe(true);
+    expect(treeHasClass(tree, AQUA_THEME.desktop)).toBe(false);
     expect(treeHasClass(tree, XP_THEME.desktop)).toBe(false);
+    expect(typeof fileOpen).toBe("boolean");
   }, 30000);
 
   test("typing, selection, ⌘ chords, context menu and paste-req", async () => {

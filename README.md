@@ -5,22 +5,47 @@ applications inside one native process. Its System UI owns windows, taskbar,
 application presentation and theme selection; PocketJS owns package
 resolution, AppInstance isolation, scheduling and native composition.
 
-The `classic` theme is inspired by late-1990s desktop interfaces. The `xp`
-theme draws Luna chrome with PocketJS-native drawing: every raised
-surface is a three-stop base gradient under stacked 1px highlight and seat
-strips, window frames round their top corners and stay square at the bottom,
-and captions, controls, menus and the taskbar carry colors sampled from a
-96dpi Luna capture. Its Start button opens the two-column XP panel — user
-header, programs column with All Programs pinned at its foot, places column,
-Turn Off Computer along the bottom — and its text is baked from Inter, since
-XP's own Tahoma cannot be redistributed. **Both themes use the same System
-manifest, AppInstances and native compositor.**
-Choose one from **Start → Settings**, or press **Cmd+Shift+T** to toggle while
-testing.
+## Three desktops, one shell
 
-| Classic 98 | Windows XP |
-|---|---|
-| ![Pocket Desktop classic theme](docs/classic-theme.png) | ![Pocket Desktop XP theme](docs/xp-theme.png) |
+Pocket Desktop ships three System UI themes. Each is a period desktop rebuilt
+from PocketJS-native drawing — no bitmaps of the originals, no theme-specific
+code paths outside the theme's own definition. **All three run on the same
+System manifest, AppInstances and native compositor.**
+
+| Classic 98 | Windows XP | Aqua |
+|---|---|---|
+| ![Pocket Desktop classic theme](docs/classic-theme.png) | ![Pocket Desktop XP theme](docs/xp-theme.png) | ![Pocket Desktop Aqua theme](docs/aqua-theme.png) |
+
+- **Classic 98** — hard two-ring bevels, 18px captions, a 28px taskbar with
+  the Start rail menu, the W95FA bitmap face, native 32px pixel-art desktop
+  icons and Explorer's coolbar and "Folders" pane in the file manager.
+- **Windows XP** — Luna chrome: three-stop gel gradients under 1px
+  highlight and seat strips, top-rounded window frames, the two-column Start
+  panel (user header, pinned programs, places, Turn Off Computer), a baked
+  green Start pill, softly shaded Luna-style vector icons, and the Explorer
+  task pane with its "Other Places" card. Text is baked from Inter, since
+  Tahoma cannot be redistributed.
+- **Aqua** — gel traffic lights on the left of a glossy caption
+  that goes matte when unfocused, the menu bar hoisted to a 22px screen bar
+  (launcher logo, program name, menus, clock), a translucent Dock, desktop
+  icons hanging from the right edge, blue-gradient highlights, pale-blue text
+  selection, white gel push buttons, and Tiger's toolbar pills, breadcrumb,
+  round search well and sidebar in the file manager. Its lights and small
+  gels are baked artwork, because the renderer bands gradient fills inside
+  small rounded boxes.
+
+The shell underneath is headless: every part — caption, control cluster, menu
+bar, launcher, task strip, popups, selections, dialogs, the file manager's
+toolbar and places sidebar — is one semantic slot the active theme fills with
+its own paint and, through its chrome metrics, its own placement (controls
+left or right, menus in the window or on the screen bar, a task strip or a
+Dock). The window manager hit-tests from the same metrics, so switching
+themes keeps every client rectangle, caret and compositor surface exact. The
+Pocket app icon is the PocketJS favicon mark, cut from Aqua silver-and-blue
+or Luna silver per theme.
+
+Choose a theme from **Start → Settings** (the logo menu on Aqua), or press
+**Cmd+Shift+T** to cycle while testing.
 
 ## Architecture
 
@@ -100,7 +125,7 @@ The production site is deployed as Cloudflare Workers Static Assets at
 `desktop.pocketlab.build`. The checked-in Wrangler configuration owns its
 custom-domain route; `bun run deploy:site` builds before publishing.
 
-Regenerate both checked-in theme screenshots from the deterministic PocketJS
+Regenerate the checked-in theme screenshots from the deterministic PocketJS
 simulator with `bun run capture`.
 
 ## Classic baseline benchmark
