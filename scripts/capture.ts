@@ -64,7 +64,8 @@ inbox.push(
 await settle(xp);
 inbox.push(JSON.stringify({ t: "key", k: "escape", cmd: true }));
 await settle(xp, 2);
-inbox.push(JSON.stringify({ t: "mouse", x: 100, y: 443, d: false, sh: false }));
+// Hover the places column's Settings row so the theme flyout is on screen.
+inbox.push(JSON.stringify({ t: "mouse", x: 230, y: 370, d: false, sh: false }));
 await settle(xp, 2);
 const xpOutput = resolve(ROOT, "docs/xp-theme.png");
 await Bun.write(

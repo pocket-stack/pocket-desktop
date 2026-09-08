@@ -28,7 +28,7 @@
     "test:site": "bun scripts/site-smoke.ts",
     "deploy:site": "bun run build:site && wrangler deploy",
     "benchmark:classic": "bun scripts/benchmark-classic.ts",
-    "capture": "bun scripts/build-sim.ts && bun scripts/capture.ts",
+    "capture": "bun scripts/build-sim.ts --density=2 && bun scripts/capture.ts",
     "bake:fonts": "bun src/system-ui/gen-assets.ts",
     "bake:icons": "bun src/system-ui/gen-icons.ts"
   },

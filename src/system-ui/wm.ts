@@ -106,7 +106,7 @@ export function contentTop(
   metrics: ChromeMetrics = DEFAULT_METRICS,
 ): number {
   return (
-    metrics.frame +
+    metrics.captionTop +
     metrics.titleH +
     metrics.titleGap +
     (opts.menuWidths.length > 0 ? metrics.menuH : 0)
@@ -169,9 +169,9 @@ export function hitRegion(
   }
 
   // Caption strip.
-  if (y >= metrics.frame && y < metrics.frame + metrics.titleH) {
+  if (y >= metrics.captionTop && y < metrics.captionTop + metrics.titleH) {
     const xs = captionButtonXs(geo.w, opts.buttons, metrics);
-    const btnTop = metrics.frame + metrics.buttonTop;
+    const btnTop = metrics.captionTop + metrics.buttonTop;
     if (y >= btnTop && y < btnTop + metrics.buttonH) {
       for (let i = 0; i < xs.length; i++) {
         if (x >= xs[i] && x < xs[i] + metrics.buttonW) {
@@ -184,7 +184,7 @@ export function hitRegion(
   }
 
   // Menu bar.
-  const menuTop = metrics.frame + metrics.titleH + metrics.titleGap;
+  const menuTop = metrics.captionTop + metrics.titleH + metrics.titleGap;
   if (
     opts.menuWidths.length > 0 &&
     y >= menuTop &&
@@ -296,4 +296,150 @@ export function cursorForDir(dir: Dir): "ew" | "ns" | "nwse" | "nesw" {
     case "sw":
       return "nesw";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Start panel
+// ---------------------------------------------------------------------------
+
+/** One hit/paint rectangle in the Start panel, in desktop coordinates. */
+export interface StartRow {
+  /** Index into the item list the layout was built from. */
+  index: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface StartLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Column split (0 when the theme paints one column beside a rail). */
+  leftW: number;
+  headerH: number;
+  footerH: number;
+  bodyY: number;
+  bodyH: number;
+  rows: StartRow[];
+}
+
+interface StartItem {
+  sep?: boolean;
+  col?: "right";
+  bottom?: boolean;
+  foot?: boolean;
+}
+
+/** Panel geometry for a Start item list. One function serves both panels:
+ *  Classic stacks every item in one column beside its rail, XP splits them
+ *  into a programs column and a places column, pins `bottom` items under the
+ *  programs column and lays `foot` items along the bottom strip. Paint
+ *  (chrome.tsx) and hit testing (app.tsx) both read these rectangles, so a
+ *  theme switch can never leave one of them behind. */
+export function startLayout(
+  items: readonly StartItem[],
+  vpH: number,
+  metrics: ChromeMetrics = DEFAULT_METRICS,
+): StartLayout {
+  const { startRowH: row, startSepH: sep, startLeftW: leftW } = metrics;
+  const twoColumn = metrics.startHeaderH > 0;
+  const pad = 1;
+  const rightW = metrics.startW - leftW - pad * 2;
+
+  const height = (which: (it: StartItem) => boolean) =>
+    items.filter(which).reduce((a, it) => a + (it.sep ? sep : row), 0);
+
+  let bodyH: number;
+  if (twoColumn) {
+    const left = height((it) => !it.foot && it.col !== "right" && !it.bottom);
+    const bottom = height((it) => !it.foot && !!it.bottom);
+    const right = height((it) => !it.foot && it.col === "right");
+    // Pinned rows (their own separator included) sit at the column's foot.
+    bodyH = Math.max(left + bottom, right);
+  } else {
+    bodyH = height((it) => true);
+  }
+
+  const h = metrics.startHeaderH + bodyH + metrics.startFooterH + pad * 2;
+  const x = metrics.startX;
+  const y = vpH - metrics.taskH - h;
+  const bodyY = y + pad + metrics.startHeaderH;
+
+  const rows: StartRow[] = [];
+  if (twoColumn) {
+    let ly = bodyY;
+    let ry = bodyY;
+    const bottomH = height((it) => !it.foot && !!it.bottom);
+    const bottomY = bodyY + bodyH - bottomH;
+    let by = bottomY;
+    let fx = x + metrics.startW - pad;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const h = it.sep ? sep : row;
+      if (it.foot) {
+        const w = Math.round(metrics.startW / 2);
+        fx -= w;
+        rows.push({
+          index: i,
+          x: fx,
+          y: y + pad + metrics.startHeaderH + bodyH,
+          w,
+          h: metrics.startFooterH,
+        });
+        continue;
+      }
+      if (it.bottom) {
+        if (!it.sep) rows.push({ index: i, x: x + pad, y: by, w: leftW, h });
+        by += h;
+        continue;
+      }
+      if (it.col === "right") {
+        if (!it.sep)
+          rows.push({ index: i, x: x + pad + leftW, y: ry, w: rightW, h });
+        ry += h;
+        continue;
+      }
+      if (!it.sep) rows.push({ index: i, x: x + pad, y: ly, w: leftW, h });
+      ly += h;
+    }
+  } else {
+    let oy = y + pad;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const h = it.sep ? sep : row;
+      if (!it.sep)
+        rows.push({
+          index: i,
+          x: x + pad + metrics.startRailW,
+          y: oy,
+          w: metrics.startW - pad * 2 - metrics.startRailW,
+          h,
+        });
+      oy += h;
+    }
+  }
+
+  return {
+    x,
+    y,
+    w: metrics.startW,
+    h,
+    leftW: twoColumn ? leftW : 0,
+    headerH: metrics.startHeaderH,
+    footerH: metrics.startFooterH,
+    bodyY,
+    bodyH,
+    rows,
+  };
+}
+
+/** The item index under a point, or -1. */
+export function startRowAt(layout: StartLayout, x: number, y: number): number {
+  for (const r of layout.rows) {
+    if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return r.index;
+  }
+  return -1;
 }
