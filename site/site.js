@@ -29,7 +29,9 @@ document.querySelectorAll("[data-theme-shot]").forEach((button) => {
     screenshot.alt = "Pocket Desktop " + theme + " theme";
     caption.textContent = theme === "xp"
       ? "XP theme · Luna gradients · 30px taskbar"
-      : "Classic 98 · hard bevels · 28px taskbar";
+      : theme === "aqua"
+        ? "Aqua · traffic lights · screen menu bar · Dock"
+        : "Classic 98 · hard bevels · 28px taskbar";
   });
 });
 

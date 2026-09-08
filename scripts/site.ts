@@ -25,5 +25,6 @@ mkdirSync(resolve(output, "assets"), { recursive: true });
 cpSync(resolve(ROOT, "src/system-ui/icons/pocket-app.svg"), resolve(output, "favicon.svg"));
 cpSync(resolve(ROOT, "docs/classic-theme.png"), resolve(output, "assets/classic-theme.png"));
 cpSync(resolve(ROOT, "docs/xp-theme.png"), resolve(output, "assets/xp-theme.png"));
+cpSync(resolve(ROOT, "docs/aqua-theme.png"), resolve(output, "assets/aqua-theme.png"));
 
 console.log("Pocket Desktop site: landing, docs, and live preview in " + output);
