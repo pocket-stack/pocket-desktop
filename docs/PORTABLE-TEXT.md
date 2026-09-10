@@ -2,24 +2,28 @@
 
 Pocket Desktop's System UI and installed demo bundles use SolidJS. The
 experimental framework implementation is pinned directly by `vendor/pocketjs`.
-All runtime imports stay under `@pocketjs/framework/*`. The [PocketJS framework PR #390](https://github.com/pocket-stack/pocketjs/pull/390)
-and Pocket Desktop migration PR are separate; the product depends on the
+All runtime imports stay under `@pocketjs/framework/*`. [PocketJS PR #390](https://github.com/pocket-stack/pocketjs/pull/390)
+provides the runtime/text migration and [PR #399](https://github.com/pocket-stack/pocketjs/pull/399)
+adds native GPU composition; the product depends on the
 published framework commit until it is merged upstream.
 
 ## Ownership
 
 | Work | Owner |
 |---|---|
-| Native window, input, clipboard, final pixel presentation | winit / softbuffer adapter |
+| Native window, input, clipboard, final GPU presentation | winit / wgpu adapter |
 | Native QuickJS guests, Solid updates, flex layout, drawing, composition | native runtime worker |
 | Browser guests and Rust software drawing | existing isolated iframe/WASM instances |
 | Text wrapping, shaping and glyph rasterization | independent `io.offload` worker |
 | PSP text execution | paired companion only; no text engine linked into PSP |
 | Theme palettes, font slots, icons, metrics | System UI theme definitions |
 
-`engine/core/src/compositor.rs` is the shared Rust painter for native and WASM.
-It preserves child surface painter order and scissor state outside the guest
-texture namespace. `AppSupervisor` retains independent realms, failure isolation,
+`pocket-ui-wgpu` executes the core DrawList on native GPU targets, including
+`SURFACE_QUAD` composition. WASM executes the same contract through
+`engine/core/src/compositor.rs`. Both preserve child surface painter order and
+scissor state outside the guest texture namespace. Native child textures are
+cached by instance generation and DrawList/resource revision; a bounded pool
+hands GPU frames to the window thread without CPU pixel copies. `AppSupervisor` retains independent realms, failure isolation,
 focus routing and hidden-app suspension. Native layout/raster work never enters
 the window event callback. Browser text work uses a Worker; the browser's general
 UI rendering still uses the existing iframe scheduler.
@@ -28,7 +32,7 @@ UI rendering still uses the existing iframe scheduler.
 Rust core and package font metrics as rendering. OpenType shaping and coverage
 use COSMIC Text, Harfrust and Swash, with an empty font database populated only
 from explicit package/provider font bytes. No CoreText, Fontconfig, installed
-font directories, or OS text measurements are used. Winit and softbuffer may
+font directories, or OS text measurements are used. Winit and wgpu may
 use OS APIs for native window presentation.
 
 ## Capability contract

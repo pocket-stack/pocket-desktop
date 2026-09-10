@@ -60,9 +60,9 @@ pocket.system.json
       ResolvedSystemPlan
              ↓
   PocketJS portable desktop host
-      ├─ winit + softbuffer: window, input and pixel presentation
+      ├─ winit + wgpu: window, input and GPU presentation
       ├─ runtime worker: SolidJS AppInstances + AppSupervisor
-      │   └─ shared Rust layout, rasterizer and surface compositor
+      │   └─ shared Rust layout + pocket-ui-wgpu drawing and surface composition
       └─ io.offload workers: portable Rust text service
           └─ the same WASM provider serves browser and paired devices
 ```
@@ -71,10 +71,13 @@ The System UI is in `src/system-ui`. Demo applications are consumed from the
 pinned `vendor/pocketjs` submodule and are not copied into this product.
 
 The experimental framework implementation is pinned directly in
-`vendor/pocketjs` from [PocketJS PR #390](https://github.com/pocket-stack/pocketjs/pull/390). A fresh `setup` uses
+`vendor/pocketjs` from [PocketJS PR #399](https://github.com/pocket-stack/pocketjs/pull/399),
+which adds GPU composition on top of [PR #390](https://github.com/pocket-stack/pocketjs/pull/390). A fresh `setup` uses
 that exact published commit; no checkout-local patches are applied.
 The desktop host no longer links gpui, CoreText or Fontconfig. Native window
-APIs only handle the window, input, clipboard and pixel presentation.
+APIs handle the window, input and clipboard. The existing `pocket-ui-wgpu`
+backend draws through Metal on macOS, retaining child textures and handing GPU
+frames to the window thread. WASM keeps the Rust software rasterizer.
 
 Notepad sends revisioned incremental edits through `io.offload`; Rust performs wrapping
 on a worker and returns bounded pages. Rendering and hit testing share an
@@ -88,8 +91,7 @@ pairing, budgets, current limits and validation.
 ## Build
 
 Requirements: Bun and Rust. macOS native builds also need Xcode command-line
-tools. Linux native builds need the X11/Wayland and software presentation
-development libraries listed by the CI workflow. Checks and browser builds
+tools. Linux native builds need the X11/Wayland development libraries and a Vulkan-capable driver listed by the CI workflow. Checks and browser builds
 require the `wasm32-unknown-unknown` Rust target.
 
 ```sh
@@ -149,6 +151,17 @@ custom-domain route; `bun run deploy:site` builds before publishing.
 
 Regenerate the checked-in theme screenshots from the deterministic PocketJS
 simulator with `bun run capture`.
+
+## Native drag benchmark
+
+After `bun run build`, run `bun run benchmark:drag` in an unlocked desktop
+session. It replays Aqua window movement at the default 800×600 size and writes
+native logs, artifact hashes and stage distributions under `.pocket/bench/drag`.
+The measurements bracket CPU tick, GPU command submission and presentation
+submission; they do not measure GPU completion or mouse-to-panel latency.
+Optional `--max-work-ms=16.7 --max-render-ms=3 --max-present-ms=3` checks apply
+p95 CPU budgets for the acceptance machine. A run with fewer than 320 of the
+340 measured drag frames fails, including when external input interrupts it.
 
 ## Historical classic baseline benchmark
 
