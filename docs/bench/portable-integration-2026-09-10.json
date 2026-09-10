@@ -1,0 +1,405 @@
+{
+  "date": "2026-09-10T19:39:07.290Z",
+  "frameworkCandidate": "022fe3af57a2346c2da739567d31e5c212ccad0a",
+  "desktop": {
+    "machine": "Apple M3 Max",
+    "viewport": {
+      "logical": [
+        800,
+        600
+      ],
+      "physical": [
+        1600,
+        1200
+      ],
+      "presentation": "native",
+      "rasterDensity": 2,
+      "policy": "dynamic"
+    },
+    "finalDragStages": {
+      "tick": {
+        "durationMs": {
+          "count": 340,
+          "median": 2.972,
+          "p95": 5.483,
+          "p99": 5.771,
+          "max": 6.378
+        },
+        "intervalMs": {
+          "count": 339,
+          "median": 16.636,
+          "p95": 19.735,
+          "p99": 21.822,
+          "max": 75.678
+        }
+      },
+      "render-submit": {
+        "durationMs": {
+          "count": 340,
+          "median": 0.27,
+          "p95": 0.376,
+          "p99": 0.414,
+          "max": 0.456
+        },
+        "intervalMs": {
+          "count": 339,
+          "median": 16.646,
+          "p95": 19.742,
+          "p99": 21.777,
+          "max": 75.714
+        }
+      },
+      "work": {
+        "durationMs": {
+          "count": 340,
+          "median": 3.332,
+          "p95": 5.863,
+          "p99": 6.196,
+          "max": 6.845
+        },
+        "intervalMs": {
+          "count": 339,
+          "median": 16.639,
+          "p95": 19.747,
+          "p99": 21.782,
+          "max": 75.715
+        }
+      },
+      "present-submit": {
+        "durationMs": {
+          "count": 340,
+          "median": 0.091,
+          "p95": 0.139,
+          "p99": 0.201,
+          "max": 0.235
+        },
+        "intervalMs": {
+          "count": 339,
+          "median": 16.643,
+          "p95": 19.753,
+          "p99": 21.761,
+          "max": 75.761
+        }
+      }
+    },
+    "errors": [],
+    "hostSha256": "889aff305b8aebd61bc213fb101a41cce61061acb9a99fef556a628dd7908e17",
+    "edgeDocumentChars": 31499,
+    "edgeActions": [
+      {
+        "tick": 60,
+        "label": "classic",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 120,
+        "label": "xp",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 180,
+        "label": "aqua",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 420,
+        "label": "long-text",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 580,
+        "label": "drag-long-text",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 600,
+        "label": "enlarge",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            1120,
+            732
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 640,
+        "label": "large",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            1120,
+            732
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 720,
+        "label": "shrink",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            400,
+            332
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 760,
+        "label": "small",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            400,
+            332
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 800,
+        "label": "restore",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 850,
+        "label": "restored",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 920,
+        "label": "long-classic",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 960,
+        "label": "long-xp",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      },
+      {
+        "tick": 1030,
+        "label": "long-aqua",
+        "ax": {
+          "pid": 11734,
+          "position": [
+            356,
+            113
+          ],
+          "size": [
+            800,
+            632
+          ],
+          "windows": 1
+        }
+      }
+    ],
+    "edgeCapture": "ScreenCaptureKit SCScreenshotManager; legacy screencapture -l snapshots excluded"
+  },
+  "3ds": {
+    "activePackage": "db9616b513dbdbf0",
+    "expectedPackage": "db9616b513dbdbf0",
+    "observedFramesPerSecond": 59.82627588391522,
+    "input": "DevTools touch replay on physical 3DS",
+    "stages": [
+      {
+        "label": "before-journey",
+        "frame": 24169,
+        "graphics": {
+          "commands": 90,
+          "vertices": 3426,
+          "droppedVertices": 0
+        }
+      },
+      {
+        "label": "section-a",
+        "frame": 24379,
+        "graphics": {
+          "commands": 90,
+          "vertices": 3408,
+          "droppedVertices": 0
+        }
+      },
+      {
+        "label": "selected-a",
+        "frame": 24599,
+        "graphics": {
+          "commands": 90,
+          "vertices": 3396,
+          "droppedVertices": 0
+        }
+      },
+      {
+        "label": "scrolled",
+        "frame": 24919,
+        "graphics": {
+          "commands": 90,
+          "vertices": 3420,
+          "droppedVertices": 0
+        }
+      },
+      {
+        "label": "section-z",
+        "frame": 25149,
+        "graphics": {
+          "commands": 90,
+          "vertices": 3510,
+          "droppedVertices": 0
+        }
+      },
+      {
+        "label": "selected-z",
+        "frame": 25379,
+        "graphics": {
+          "commands": 90,
+          "vertices": 3558,
+          "droppedVertices": 0
+        }
+      }
+    ],
+    "texturePixels": {
+      "checks": {
+        "red": [
+          255,
+          0,
+          0
+        ],
+        "green": [
+          0,
+          255,
+          0
+        ]
+      },
+      "freed": [
+        162,
+        168,
+        177
+      ],
+      "result": "passed"
+    }
+  },
+  "vita": {
+    "state": "awaiting physical runtime receipt"
+  },
+  "crossMonitorDpi": {
+    "state": "awaiting second display"
+  },
+  "frameworkMerged": "b5e2a27447022c52e5065aabe2be728f464e5b86"
+}
