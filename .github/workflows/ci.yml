@@ -23,6 +23,7 @@ jobs:
       - run: bun install --cwd vendor/pocketjs --frozen-lockfile
       - run: bun scripts/setup.ts
       - run: bun run check
+      - run: bun run test:rust
       - run: bun run build
 
   linux-web:
@@ -33,12 +34,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - name: Install gpui Linux dependencies
+      - name: Install native window dependencies
         run: >-
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
-          clang cmake pkg-config libasound2-dev libfontconfig-dev libglib2.0-dev
-          libssl-dev libvulkan1 libwayland-dev libx11-xcb-dev
-          libxkbcommon-x11-dev libzstd-dev mesa-vulkan-drivers xvfb xauth
+          clang cmake pkg-config libwayland-dev libx11-dev libx11-xcb-dev
+          libxkbcommon-dev libxkbcommon-x11-dev libudev-dev libdrm-dev libgbm-dev
+          libxcb-shape0-dev libxcb-xfixes0-dev xvfb xauth libvulkan1 mesa-vulkan-drivers
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -46,13 +47,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            vendor/pocketjs/engine/backends/gpui
+            vendor/pocketjs/engine/crates/pocket-text
             vendor/pocketjs/hosts/desktop
             vendor/pocketjs/engine/wasm
       - run: bun install --frozen-lockfile
       - run: bun install --cwd vendor/pocketjs --frozen-lockfile
       - run: bun scripts/setup.ts
       - run: bun run check
+      - run: bun run test:rust
       - run: bun run package:linux
       - uses: browser-actions/setup-chrome@v2
         id: setup-chrome

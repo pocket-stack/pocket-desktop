@@ -1,6 +1,5 @@
-// src/system-ui/chrome.tsx — presentational theme-neutral chrome, Vue Vapor JSX
-// (vue-jsx-vapor; lists are plain .map() like every vapor JSX app in the
-// repo). Every component here only paints; the compositor (app.tsx) owns hit
+// src/system-ui/chrome.tsx — presentational theme-neutral chrome, SolidJS JSX
+// (SolidJS universal renderer). Every component here only paints; the compositor (app.tsx) owns hit
 // testing and routes all pointer/keyboard input itself off the svc mouse
 // stream, so nothing in this file registers a handler. Geometry mirrors
 // wm.ts through the active theme's ChromeMetrics.
@@ -58,14 +57,14 @@ export function CaptionButtons(props: {
 }) {
   const w = props.win;
   const state = (btn: WinCtl["buttons"][number], present: boolean): CaptionState => ({
-    pressed: w.pressedBtn.value === btn,
-    hover: w.captionHover.value,
+    pressed: w.pressedBtn() === btn,
+    hover: w.captionHover(),
     active: props.active,
     present,
   });
   return (
     <View class={props.theme.captionControls}>
-      {captionSlots(w.geo.value.w, w.buttons, props.theme.metrics).map(
+      {captionSlots(w.geo().w, w.buttons, props.theme.metrics).map(
         (slot) => (
           <View
             class={props.theme.captionButton(
@@ -86,7 +85,7 @@ export function CaptionButtons(props: {
               ))}
             {props.theme.captionGlyphSource(
               slot.button,
-              slot.button === "max" && w.maximized.value,
+              slot.button === "max" && w.maximized(),
               state(slot.button, slot.present),
             ) !== "" ? (
               <Image
@@ -95,7 +94,7 @@ export function CaptionButtons(props: {
                 )}
                 src={props.theme.captionGlyphSource(
                   slot.button,
-                  slot.button === "max" && w.maximized.value,
+                  slot.button === "max" && w.maximized(),
                   state(slot.button, slot.present),
                 )}
               />

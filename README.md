@@ -1,7 +1,8 @@
 # Pocket Desktop
 
 Pocket Desktop is a Pocket System product that runs multiple isolated Pocket
-applications inside one native process. Its System UI owns windows, taskbar,
+applications inside one native process. The entire System UI uses SolidJS and
+PocketJS's universal renderer. It owns windows, taskbar,
 application presentation and theme selection; PocketJS owns package
 resolution, AppInstance isolation, scheduling and native composition.
 
@@ -58,30 +59,52 @@ pocket.system.json
              ↓
       ResolvedSystemPlan
              ↓
-  PocketJS generic native desktop host
-      ├─ System UI AppInstance
-      ├─ AppSupervisor
-      └─ native compositor surfaces
+  PocketJS portable desktop host
+      ├─ winit + wgpu: window, input and GPU presentation
+      ├─ runtime worker: SolidJS AppInstances + AppSupervisor
+      │   └─ shared Rust layout + pocket-ui-wgpu drawing and surface composition
+      └─ io.offload workers: portable Rust text service
+          └─ the same WASM provider serves browser and paired devices
 ```
 
 The System UI is in `src/system-ui`. Demo applications are consumed from the
 pinned `vendor/pocketjs` submodule and are not copied into this product.
 
+The experimental framework implementation is pinned directly in
+`vendor/pocketjs` from [PocketJS PR #399](https://github.com/pocket-stack/pocketjs/pull/399),
+which adds GPU composition on top of [PR #390](https://github.com/pocket-stack/pocketjs/pull/390). A fresh `setup` uses
+that exact published commit; no checkout-local patches are applied.
+The desktop host no longer links gpui, CoreText or Fontconfig. Native window
+APIs handle the window, input and clipboard. The existing `pocket-ui-wgpu`
+backend draws through Metal on macOS, retaining child textures and handing GPU
+frames to the window thread. WASM keeps the Rust software rasterizer.
+
+Notepad sends revisioned incremental edits through `io.offload`; Rust performs wrapping
+on a worker and returns bounded pages. Rendering and hit testing share an
+accepted source/geometry snapshot. Long documents render only visible rows.
+The OpenType service uses COSMIC Text/Harfrust/Swash with explicitly supplied
+font bytes, including on WASM. No system font discovery occurs.
+
+See [the text capability and companion contract](docs/PORTABLE-TEXT.md) for
+pairing, budgets, current limits and validation.
+
 ## Build
 
 Requirements: Bun and Rust. macOS native builds also need Xcode command-line
-tools. Linux native builds need the gpui X11/Wayland, Fontconfig and Vulkan
-development libraries listed by the CI workflow.
+tools. Linux native builds need the X11/Wayland development libraries and a Vulkan-capable driver listed by the CI workflow. Checks and browser builds
+require the `wasm32-unknown-unknown` Rust target.
 
 ```sh
 bun run setup
+rustup target add wasm32-unknown-unknown
 bun run check
+bun run test:rust
 bun run build
 bun run macos
 ```
 
 On Linux, build and launch the same resolved Pocket System through the generic
-gpui AppSupervisor host:
+portable Rust AppSupervisor host:
 
 ```sh
 bun run linux
@@ -107,7 +130,7 @@ bun run web
 bun run test:web
 ```
 
-The browser host runs every installed package in an independent iframe
+The browser host uses a separate WASM text worker per package. It runs every installed package in an independent iframe
 JavaScript Realm with its own wasm UI instance. The parent AppSupervisor
 schedules focused/visible AppInstances and composites child rasters at the
 shell's `CompositorSurface` painter positions. `test:web` drives a real
@@ -129,9 +152,22 @@ custom-domain route; `bun run deploy:site` builds before publishing.
 Regenerate the checked-in theme screenshots from the deterministic PocketJS
 simulator with `bun run capture`.
 
-## Classic baseline benchmark
+## Native drag benchmark
 
-Build the macOS release host, keep the desktop session unlocked and run:
+After `bun run build`, run `bun run benchmark:drag` in an unlocked desktop
+session. It replays Aqua window movement at the default 800×600 size and writes
+native logs, artifact hashes and stage distributions under `.pocket/bench/drag`.
+The measurements bracket CPU tick, GPU command submission and presentation
+submission; they do not measure GPU completion or mouse-to-panel latency.
+Optional `--max-work-ms=16.7 --max-render-ms=3 --max-present-ms=3` checks apply
+p95 CPU budgets for the acceptance machine. A run with fewer than 320 of the
+340 measured drag frames fails, including when external input interrupts it.
+
+## Historical classic baseline benchmark
+
+The checked-in August baseline measures the previous gpui host and is not a
+performance claim for the portable renderer. To record a new comparable run,
+build the macOS release host, keep the desktop session unlocked and run:
 
 ```sh
 bun run build

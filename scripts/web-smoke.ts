@@ -166,16 +166,24 @@ try {
   await command("Runtime.enable");
   await command("Log.enable");
   await command("Page.enable");
+  await command("Emulation.setDeviceMetricsOverride", {
+    width: 1280, height: 1000, deviceScaleFactor: 2, mobile: false,
+  });
   await waitFor("Pocket Desktop Ready state", async () => {
     const status = await evaluate<string | null>(
       "document.querySelector('#status')?.textContent ?? null",
     );
+    if (status === "Preview failed") throw new Error(await evaluate<string>("document.querySelector('#log')?.textContent ?? 'Preview failed'"));
     return status?.startsWith("Ready") ? status : null;
   }, 60_000);
 
   const rect = await evaluate<{ left: number; top: number; width: number; height: number }>(
     "(() => { const r = document.querySelector('#desktop').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; })()",
   );
+  const backing = await evaluate<number[]>("(() => { const c = document.querySelector('#desktop'); return [c.width, c.height]; })()");
+  if (rect.width !== 400 || rect.height !== 300 || backing[0] !== 800 || backing[1] !== 600) {
+    throw new Error(`Expected 800x600 pixels displayed at 400x300, got ${backing} in ${rect.width}x${rect.height}`);
+  }
   const x = rect.left + (45 / 800) * rect.width;
   const y = rect.top + (320 / 600) * rect.height;
   const click = async (clickCount: number) => {

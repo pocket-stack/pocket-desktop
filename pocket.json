@@ -10,7 +10,9 @@
       "requires": [
         "text.glyphs.baked",
         "input.buttons",
-        "ui.compositor-surfaces"
+        "ui.compositor-surfaces",
+        "io.offload",
+        "text.layout.offload"
       ],
       "enhances": [
         "input.text",
@@ -24,7 +26,7 @@
   "app": {
     "entry": "src/system-ui/main.tsx",
     "output": "pocket-desktop-system-ui",
-    "framework": "vue-vapor",
+    "framework": "solid",
     "companions": [
       "system-ui"
     ],

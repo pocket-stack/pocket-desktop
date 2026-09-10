@@ -1,7 +1,7 @@
 // test/system-ui.test.ts — Pocket Desktop: window-manager chrome math, the
 // Minesweeper rules, Notepad line editing and the selection model (all
 // pure). The sim boot smoke lives in test/system-ui-sim.test.ts (needs the
-// vue-vapor bundle prebuilt).
+// solid bundle prebuilt).
 
 import { describe, expect, test } from "bun:test";
 import {
